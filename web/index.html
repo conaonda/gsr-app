@@ -1,0 +1,270 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#071321" />
+    <title>GSR · 경기장면 등록 워크스테이션</title>
+    <link rel="stylesheet" href="/web/style.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div class="brand-lockup">
+          <div class="brand-mark" aria-hidden="true"><span></span><span></span><span></span></div>
+          <div>
+            <p class="eyebrow">GSR / GAME SITUATION REVIEW</p>
+            <h1>경기장면 등록 워크스테이션</h1>
+          </div>
+        </div>
+        <div class="topbar-right">
+          <span class="p0-chip">P0 · 수동 등록</span>
+          <div class="api-state" id="apiState" data-status="idle">
+            <span class="status-dot" aria-hidden="true"></span>
+            <span id="apiStateText">연결 확인 중</span>
+          </div>
+        </div>
+      </header>
+
+      <div class="global-alert" id="globalAlert" role="status" aria-live="polite" hidden>
+        <span class="alert-icon" aria-hidden="true">!</span>
+        <span id="globalAlertText"></span>
+        <button class="icon-button alert-dismiss" id="dismissAlert" type="button" aria-label="알림 닫기">×</button>
+      </div>
+
+      <main class="workspace">
+        <aside class="sidebar left-sidebar">
+          <section class="panel import-panel">
+            <div class="panel-heading">
+              <div>
+                <p class="section-kicker">SOURCE</p>
+                <h2>로컬 영상 등록</h2>
+              </div>
+              <span class="tiny-status">LOCAL</span>
+            </div>
+            <p class="helper-text">분석 서버가 접근할 수 있는 로컬 절대경로를 입력하세요. 영상은 외부로 전송되지 않습니다.</p>
+            <form id="importForm" class="import-form">
+              <label class="field-label" for="videoPath">영상 경로</label>
+              <div class="input-with-action">
+                <input id="videoPath" name="path" type="text" autocomplete="off" placeholder="예: D:\\match\\clip_01.mp4" required />
+                <button class="primary-button compact" type="submit" id="importButton">등록</button>
+              </div>
+              <p class="field-hint" id="importHint">지원 형식과 실제 경로는 서버의 ffprobe 설정을 따릅니다.</p>
+            </form>
+          </section>
+
+          <section class="panel library-panel">
+            <div class="panel-heading compact-heading">
+              <div>
+                <p class="section-kicker">LIBRARY</p>
+                <h2>등록된 영상</h2>
+              </div>
+              <button class="text-button" id="refreshLibrary" type="button">새로고침</button>
+            </div>
+            <div class="library-list" id="libraryList">
+              <div class="subtle-empty">등록된 영상이 없습니다.</div>
+            </div>
+          </section>
+
+          <section class="panel session-panel" id="sessionPanel" hidden>
+            <div class="panel-heading compact-heading">
+              <div>
+                <p class="section-kicker">SESSION</p>
+                <h2>현재 소스</h2>
+              </div>
+              <span class="recording-dot" aria-hidden="true"></span>
+            </div>
+            <p class="session-name" id="sessionName">—</p>
+            <dl class="metadata-list">
+              <div><dt>해상도</dt><dd id="videoDimensions">—</dd></div>
+              <div><dt>길이</dt><dd id="videoDuration">—</dd></div>
+              <div><dt>프레임</dt><dd id="videoFrameCount">—</dd></div>
+              <div><dt>Time base</dt><dd id="videoTimeBase">—</dd></div>
+            </dl>
+          </section>
+
+          <section class="panel frame-panel" id="framePanel" hidden>
+            <div class="panel-heading compact-heading">
+              <div>
+                <p class="section-kicker">FRAME CONTROL</p>
+                <h2>프레임 탐색</h2>
+              </div>
+              <span class="frame-loading" id="frameLoading" hidden>불러오는 중</span>
+            </div>
+            <div class="frame-readout" aria-live="polite">
+              <div class="frame-number"><span id="frameIndexReadout">—</span><span class="frame-total"> / <span id="frameTotalReadout">—</span></span></div>
+              <div class="pts-readout"><span id="frameTimeReadout">00:00:00.000</span><span class="pts-label"> PTS <span id="framePtsReadout">—</span></span></div>
+            </div>
+            <input id="frameSlider" class="frame-slider" type="range" min="0" max="0" value="0" step="1" aria-label="프레임 선택" />
+            <div class="slider-scale"><span>시작</span><span id="sliderEndLabel">—</span></div>
+            <div class="frame-nav">
+              <button class="secondary-button" id="previousFrame" type="button" aria-label="이전 프레임">‹ 이전</button>
+              <button class="secondary-button" id="nextFrame" type="button" aria-label="다음 프레임">다음 ›</button>
+            </div>
+            <p class="field-hint frame-hint">프레임을 바꾸면 현재 미저장 대응점이 초기화됩니다.</p>
+          </section>
+
+          <section class="panel export-panel" id="exportPanel" hidden>
+            <div class="panel-heading compact-heading">
+              <div>
+                <p class="section-kicker">SESSION FILE</p>
+                <h2>세션 내보내기</h2>
+              </div>
+              <span class="export-symbol" aria-hidden="true">↗</span>
+            </div>
+            <p class="helper-text">현재 영상과 저장된 등록 결과를 JSON으로 내려받습니다.</p>
+            <a class="secondary-button export-link" id="exportLink" href="#" target="_blank" rel="noopener">JSON 내보내기 <span>↗</span></a>
+          </section>
+        </aside>
+
+        <section class="main-column">
+          <section class="empty-state" id="emptyState">
+            <div class="empty-visual" aria-hidden="true">
+              <div class="empty-crosshair"><span></span><span></span></div>
+              <div class="empty-frame"></div>
+            </div>
+            <p class="section-kicker">READY FOR SOURCE</p>
+            <h2>분석할 영상을 등록하세요</h2>
+            <p>왼쪽에 서버가 접근 가능한 로컬 영상 경로를 입력하면, 실제 PTS 프레임을 기준으로 장면 등록을 시작할 수 있습니다.</p>
+            <div class="empty-note"><span class="note-dot"></span>결과와 품질 점수는 실제 대응점을 저장한 뒤에만 표시됩니다.</div>
+          </section>
+
+          <section class="analysis-stage" id="analysisStage" hidden>
+            <div class="stage-toolbar">
+              <div>
+                <p class="section-kicker">REGISTRATION STAGE</p>
+                <h2>소스 프레임과 피치 좌표를 맞추세요</h2>
+              </div>
+              <div class="stage-toolbar-actions">
+                <span class="draft-state" id="draftState"><span class="draft-dot"></span>편집 중</span>
+                <button class="ghost-button" id="clearPoints" type="button">대응점 초기화</button>
+              </div>
+            </div>
+
+            <div class="instruction-strip" id="instructionStrip">
+              <span class="instruction-index">01</span>
+              <div><strong>소스 프레임에서 점을 클릭</strong><span>선택한 지점의 대응점을 피치 좌표 평면에서 이어 클릭하세요.</span></div>
+              <div class="mode-toggle" role="group" aria-label="점 유형 선택">
+                <button class="mode-button active" data-mode="fit" type="button">FIT <span>추정</span></button>
+                <button class="mode-button" data-mode="validation" type="button">VALIDATION <span>검증</span></button>
+              </div>
+            </div>
+
+            <div class="canvas-grid">
+              <section class="canvas-card source-card">
+                <div class="canvas-card-header">
+                  <div><span class="canvas-index">A</span><div><h3>소스 프레임</h3><p>이미지 좌표 · native px</p></div></div>
+                  <span class="canvas-size" id="sourceCanvasSize">—</span>
+                </div>
+                <div class="canvas-wrap source-wrap" id="sourceWrap">
+                  <canvas id="sourceCanvas" aria-label="소스 프레임. 대응점을 클릭하세요."></canvas>
+                  <div class="canvas-overlay-message" id="sourceCanvasMessage">프레임을 불러오는 중입니다.</div>
+                </div>
+                <div class="canvas-footer"><span class="legend-point fit-legend"></span>FIT <span class="legend-point validation-legend"></span>VALIDATION <span class="native-note">좌표는 원본 픽셀 기준</span></div>
+              </section>
+
+              <div class="pair-arrow" aria-hidden="true"><span>↔</span><small>PAIR</small></div>
+
+              <section class="canvas-card pitch-card">
+                <div class="canvas-card-header">
+                  <div><span class="canvas-index">B</span><div><h3>피치 좌표 평면</h3><p>정규화 좌표 · 0–1</p></div></div>
+                  <span class="canvas-size">NORMALIZED</span>
+                </div>
+                <div class="canvas-wrap pitch-wrap">
+                  <canvas id="pitchCanvas" aria-label="정규화 피치 좌표 평면. 대응점을 클릭하세요."></canvas>
+                  <div class="pitch-axis axis-x">x 0 → 1</div>
+                  <div class="pitch-axis axis-y">y 0 → 1</div>
+                </div>
+                <div class="canvas-footer"><span class="legend-line projected-legend"></span>추정 투영선 <span class="native-note">실제 규격은 선택 입력</span></div>
+              </section>
+            </div>
+
+            <section class="point-editor panel">
+              <div class="panel-heading compact-heading">
+                <div><p class="section-kicker">CORRESPONDENCE PAIRS</p><h2>대응점 <span class="count-badge" id="pointCount">0</span></h2></div>
+                <button class="text-button" id="cancelPending" type="button">선택 취소</button>
+              </div>
+              <div class="point-table-wrap">
+                <table class="point-table">
+                  <thead><tr><th scope="col">#</th><th scope="col">역할</th><th scope="col">이미지 x</th><th scope="col">이미지 y</th><th scope="col">피치 x <span>0–1</span></th><th scope="col">피치 y <span>0–1</span></th><th scope="col"><span class="sr-only">삭제</span></th></tr></thead>
+                  <tbody id="pointTableBody"><tr class="table-empty"><td colspan="7">캔버스에서 FIT 대응점을 4개 이상, 서로 떨어진 위치에 지정하세요.</td></tr></tbody>
+                </table>
+              </div>
+            </section>
+          </section>
+        </section>
+
+        <aside class="sidebar right-sidebar">
+          <section class="panel field-panel" id="fieldPanel" hidden>
+            <div class="panel-heading compact-heading">
+              <div><p class="section-kicker">OPTIONAL METRIC INPUT</p><h2>필드 실측값</h2></div>
+              <span class="optional-chip">선택</span>
+            </div>
+            <p class="helper-text">미입력 시 정규화 좌표로만 저장됩니다. 검증되지 않은 값은 metric 결과로 표시하지 않습니다.</p>
+            <div class="metric-input-grid">
+              <label><span>길이</span><div class="unit-input"><input id="fieldLength" type="number" min="0" step="0.01" placeholder="—" /><em>m</em></div></label>
+              <label><span>너비</span><div class="unit-input"><input id="fieldWidth" type="number" min="0" step="0.01" placeholder="—" /><em>m</em></div></label>
+            </div>
+            <label class="checkbox-row"><input id="dimensionsVerified" type="checkbox" /><span class="checkmark"></span><span>실측 또는 공식 도면으로 확인됨</span></label>
+            <label class="field-label provenance-label" for="dimensionSource">검증 출처</label>
+            <input id="dimensionSource" class="full-input" type="text" placeholder="예: 경기장 도면 / 현장 실측" autocomplete="off" />
+            <p class="field-hint" id="dimensionHint">숫자와 출처가 있어도 확인됨 체크 전에는 metric으로 사용되지 않습니다.</p>
+          </section>
+
+          <section class="panel estimate-panel" id="estimatePanel" hidden>
+            <div class="panel-heading compact-heading">
+              <div><p class="section-kicker">QUALITY GATE</p><h2>등록 추정</h2></div>
+              <span class="quality-lamp" id="qualityLamp" data-status="idle"></span>
+            </div>
+            <div class="estimate-summary" id="estimateSummary"><span class="summary-placeholder">대응점을 지정하면 저장 전 품질 점검이 표시됩니다.</span></div>
+            <div class="estimate-actions">
+              <button class="secondary-button" id="estimateButton" type="button">입력 조건 확인</button>
+              <button class="primary-button" id="saveButton" type="button" disabled>등록 저장</button>
+            </div>
+            <p class="field-hint">입력 조건이 부족해도 저장할 수 있습니다. 서버 geometry가 실제 결과와 실패 사유를 계산합니다.</p>
+          </section>
+
+          <section class="panel result-panel" id="resultPanel" hidden>
+            <div class="panel-heading compact-heading">
+              <div><p class="section-kicker">LATEST RESULT</p><h2>등록 결과</h2></div>
+              <span class="result-source" id="resultSource">—</span>
+            </div>
+            <div id="resultBody" class="result-body"><div class="subtle-empty">저장된 결과가 없습니다.</div></div>
+          </section>
+
+          <section class="panel propagation-panel" id="propagationPanel" hidden>
+            <div class="panel-heading compact-heading">
+              <div><p class="section-kicker">CONSERVATIVE PROPAGATION</p><h2>다음 프레임으로 전파</h2></div>
+              <span class="future-chip">P0 제한</span>
+            </div>
+            <p class="helper-text">현재 등록을 ground ROI optical flow로 보수적으로 전파합니다. 결과는 자동 승인되지 않으며 반드시 다시 검증하세요.</p>
+            <label class="field-label" for="propagationTarget">대상 프레임 인덱스</label>
+            <div class="input-with-action propagation-input"><input id="propagationTarget" type="number" min="0" step="1" placeholder="예: 120" /><button class="secondary-button compact" id="propagateButton" type="button">전파</button></div>
+            <p class="field-hint" id="propagationHint">저장된 등록 결과를 선택하면 사용할 수 있습니다.</p>
+          </section>
+
+          <section class="panel history-panel" id="historyPanel" hidden>
+            <div class="panel-heading compact-heading">
+              <div><p class="section-kicker">QUALITY TIMELINE</p><h2>등록 기록 <span class="count-badge" id="historyCount">0</span></h2></div>
+              <span class="history-caption">선택 가능</span>
+            </div>
+            <div class="quality-timeline" id="qualityTimeline"><div class="subtle-empty">저장된 등록이 없습니다.</div></div>
+            <div class="history-list" id="historyList"></div>
+          </section>
+
+          <section class="panel future-panel">
+            <div class="panel-heading compact-heading"><div><p class="section-kicker">ROADMAP</p><h2>다음 분석 단계</h2></div><span class="roadmap-symbol">○</span></div>
+            <div class="future-list">
+              <div><span>P1</span><p>자동 선수 추적</p><em>예정</em></div>
+              <div><span>P2</span><p>이벤트·구역 검색</p><em>예정</em></div>
+              <div><span>P3</span><p>SAM2·자연어 검색</p><em>예정</em></div>
+            </div>
+          </section>
+        </aside>
+      </main>
+    </div>
+
+    <template id="libraryItemTemplate"><button class="library-item" type="button"><span class="library-item-main"><strong></strong><small></small></span><span class="library-arrow">›</span></button></template>
+    <script src="/web/app.js" defer></script>
+  </body>
+</html>
