@@ -4,6 +4,16 @@ GSR의 원본 영상 정합 편집기. 휴대폰 축구 영상의 프레임을 �
 
 v0.2 첫 개발 묶음은 좌표 사용 자격 보완, 저장 없는 정합 미리보기, 원본 편집·오버레이입니다. 후속 개선으로 풋살장 기준도, 이름으로 기준점 연결, 빠른 프레임 탐색과 캐시가 추가됐습니다. 선·원호 정합과 선수 추적은 후속 단계입니다.
 
+## 개발 현황과 로드맵
+
+현재 구현 반영 상태, 실제 영상에서 확인한 병목, v0.2 잔여 작업, v0.3 관측 계약과 P1 선수 추적의 다음 순서는 [docs/development-status.md](docs/development-status.md)에 정리되어 있습니다.
+
+관련 문서:
+
+- [V02_IMPLEMENTATION.md](V02_IMPLEMENTATION.md): v0.2 첫 개발 묶음의 구현 범위
+- [docs/v02-evaluation.md](docs/v02-evaluation.md): 자동 검증과 실제 영상 평가 결과
+- [CONTRACT.md](CONTRACT.md): API와 데이터 계약
+
 ## 실행
 
 Python 3.11 이상과 PATH에 등록된 FFmpeg/FFprobe가 필요합니다.
