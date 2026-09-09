@@ -4,6 +4,7 @@
 로드맵 결정: **자동 정합 비교를 먼저 수행하며, 수동 점·선 입력 확장을 제품의 선행 조건으로 두지 않는다.**
 
 다음 작업의 기준 문서는 [Experiment 001: 수동 입력 없는 자동 정합 비교](../experiments/001-auto-calibration/README.md)다.
+완료 범위·미실행 항목·PnLCalib 첫 추론의 완료 조건은 [실행 현황과 다음 작업 인계](../experiments/001-auto-calibration/status-and-handoff.md)에 정리한다.
 이 결정은 이전 문서의 `observation-v2 → 수동 점+선 → snap → 자동화` 우선순위를 대체한다.
 기존 구현과 저장 데이터를 삭제하거나 현재 `CONTRACT.md`의 좌표 사용 자격을 완화하는 결정은 아니다.
 
@@ -26,6 +27,8 @@
 [기능 평가](v02-evaluation.md), [영상 접근 개선/측정](improvement-plan.md)을 참고한다.
 `fbecdf7`의 GitHub Actions [run 34336336016](https://github.com/conaonda/gsr-app/actions/runs/34336336016)은
 이 코드 기준의 기능 검사 근거다. 이후 experiment 변경이나 자동 모델 정확도까지 그 성공으로 인증하지 않는다.
+
+Experiment 001 준비 커밋 `48c78a6`의 PR 검사 [run 34368428939](https://github.com/conaonda/gsr-app/actions/runs/34368428939)도 `completed / success`를 확인했다. 이는 준비 도구와 기존 기능의 검사이며 자동 정합 추론·정확도 검증 결과가 아니다. 입력 준비 실행 및 테스트 기록은 [preparation-results.md](../experiments/001-auto-calibration/preparation-results.md), 실행 여부와 다음 작업은 [인계 문서](../experiments/001-auto-calibration/status-and-handoff.md)를 참고한다.
 
 ## 왜 순서를 바꾸는가
 
@@ -86,3 +89,4 @@ SAM2, 등번호 인식, 이벤트 해설을 동시에 첫 실행의 필수 의�
 - [기능/초기 실제 영상 평가](v02-evaluation.md)
 - [영상 접근 개선 결과](improvement-plan.md)
 - [자동 정합 비교 실험](../experiments/001-auto-calibration/README.md)
+- [실행 현황과 다음 작업 인계](../experiments/001-auto-calibration/status-and-handoff.md)
