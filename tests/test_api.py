@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+import sqlite3
 import subprocess
 
 import cv2
@@ -61,7 +62,10 @@ def test_real_generated_video_round_trip_and_sqlite_persistence(tmp_path: Path) 
         "height": 540,
         "duration": pytest.approx(3.0),
         "time_base": video["time_base"],
+        "source_revision": video["source_revision"],
     }
+    assert isinstance(video["source_revision"], str)
+    assert len(video["source_revision"]) == 64
 
     frames = client.get(f"/api/videos/{video['id']}/frames").json()
     assert len(frames) == 30
@@ -124,6 +128,161 @@ def test_real_generated_video_round_trip_and_sqlite_persistence(tmp_path: Path) 
     assert len(exported["registrations"]) == 2
     # Machine-local paths stay private to the SQLite source index.
     assert str(video_path) not in json.dumps(exported)
+
+
+def test_preview_is_side_effect_free_and_save_recomputes_the_same_analysis(tmp_path: Path) -> None:
+    video_path = make_video(tmp_path / "preview.mp4")
+    db_path = tmp_path / "sessions.sqlite3"
+    client = TestClient(create_app(db_path))
+    video = _add_video(client, video_path)
+    payload = {
+        "frame_index": 0,
+        "field": {
+            "length": None,
+            "width": None,
+            "dimension_source": "",
+            "dimensions_verified": False,
+        },
+        "points": _registerable_points(),
+        "note": "draft",
+    }
+
+    for draft_version in range(20):
+        response = client.post(
+            f"/api/videos/{video['id']}/registrations/preview",
+            json={**payload, "draft_version": draft_version},
+            headers=LOOPBACK_HEADERS,
+        )
+        assert response.status_code == 200, response.text
+        preview = response.json()
+        assert preview["source"] == "preview"
+        assert preview["persisted"] is False
+        assert preview["draft_version"] == draft_version
+        assert preview["video_id"] == video["id"]
+        assert preview["frame_index"] == 0
+        assert "id" not in preview
+
+    assert client.get(f"/api/videos/{video['id']}/registrations").json() == []
+
+    saved_response = client.post(
+        f"/api/videos/{video['id']}/registrations",
+        json=payload,
+        headers=LOOPBACK_HEADERS,
+    )
+    assert saved_response.status_code == 200, saved_response.text
+    saved = saved_response.json()
+    for key in (
+        "matrix",
+        "status",
+        "coordinate_level",
+        "reasons",
+        "validation_error_px",
+        "fit_error_px",
+        "valid_region",
+        "projected_lines",
+        "sensitivity",
+        "analysis_provenance",
+    ):
+        assert preview[key] == saved[key]
+
+
+def test_preview_draft_and_coordinate_numbers_are_strict_and_do_not_write(tmp_path: Path) -> None:
+    video_path = make_video(tmp_path / "strict-preview.mp4")
+    client = TestClient(create_app(tmp_path / "sessions.sqlite3"))
+    video = _add_video(client, video_path)
+    payload = {
+        "frame_index": 0,
+        "field": {"dimensions_verified": False},
+        "points": _registerable_points(),
+    }
+    endpoint = f"/api/videos/{video['id']}/registrations/preview"
+    for draft_version in (True, "1", -1):
+        response = client.post(
+            endpoint,
+            json={**payload, "draft_version": draft_version},
+            headers=LOOPBACK_HEADERS,
+        )
+        assert response.status_code == 422
+    bad_coordinates = {**payload, "draft_version": 1}
+    bad_coordinates["points"] = [dict(payload["points"][0], image=[True, 80])]
+    response = client.post(endpoint, json=bad_coordinates, headers=LOOPBACK_HEADERS)
+    assert response.status_code == 422
+    bad_dimensions = {**payload, "draft_version": 1}
+    bad_dimensions["field"] = {"length": float("inf"), "dimensions_verified": False}
+    response = client.post(
+        endpoint,
+        content=json.dumps(bad_dimensions, allow_nan=True),
+        headers={**LOOPBACK_HEADERS, "Content-Type": "application/json"},
+    )
+    assert response.status_code == 422
+    for client_result in ({"matrix": [[1, 0, 0], [0, 1, 0], [0, 0, 1]]}, {"status": "usable"}):
+        response = client.post(
+            f"/api/videos/{video['id']}/registrations",
+            json={**payload, **client_result},
+            headers=LOOPBACK_HEADERS,
+        )
+        assert response.status_code == 422
+    assert client.get(f"/api/videos/{video['id']}/registrations").json() == []
+
+
+def test_legacy_review_coordinate_eligibility_is_corrected_on_read_only(tmp_path: Path) -> None:
+    video_path = make_video(tmp_path / "legacy.mp4")
+    db_path = tmp_path / "sessions.sqlite3"
+    client = TestClient(create_app(db_path))
+    video = _add_video(client, video_path)
+    response = client.post(
+        f"/api/videos/{video['id']}/registrations",
+        json={
+            "frame_index": 0,
+            "field": {
+                "length": 105,
+                "width": 68,
+                "dimension_source": "manual",
+                "dimensions_verified": True,
+            },
+            "points": _registerable_points()[:4],
+        },
+        headers=LOOPBACK_HEADERS,
+    )
+    assert response.status_code == 200, response.text
+    saved = response.json()
+    assert saved["status"] == "review"
+    assert saved["coordinate_level"] == "image"
+
+    with sqlite3.connect(db_path) as connection:
+        raw = json.loads(
+            connection.execute(
+                "SELECT analysis_json FROM registrations WHERE id = ?", (saved["id"],)
+            ).fetchone()[0]
+        )
+        raw["coordinate_level"] = "metric"
+        connection.execute(
+            "UPDATE registrations SET analysis_json = ? WHERE id = ?",
+            (json.dumps(raw, separators=(",", ":")), saved["id"]),
+        )
+        connection.commit()
+        raw_before_read = connection.execute(
+            "SELECT analysis_json FROM registrations WHERE id = ?", (saved["id"],)
+        ).fetchone()[0]
+
+    reopened = TestClient(create_app(db_path))
+    corrected = reopened.get(f"/api/videos/{video['id']}/registrations").json()[0]
+    assert corrected["coordinate_level"] == "image"
+    assert corrected["matrix"] == raw["matrix"]
+    assert corrected["eligibility_correction"] == {
+        "field": "coordinate_level",
+        "original_value": "metric",
+        "corrected_value": "image",
+        "policy_version": "gsr.coordinate-eligibility.v2",
+    }
+    exported = reopened.get(f"/api/videos/{video['id']}/export").json()
+    assert exported["registrations"][0]["eligibility_correction"] == corrected["eligibility_correction"]
+    with sqlite3.connect(db_path) as connection:
+        raw_after_read = connection.execute(
+            "SELECT analysis_json FROM registrations WHERE id = ?", (saved["id"],)
+        ).fetchone()[0]
+    assert raw_after_read == raw_before_read
+    assert json.loads(raw_after_read)["coordinate_level"] == "metric"
 
 
 def test_rotated_video_reports_and_serves_display_dimensions(tmp_path: Path) -> None:

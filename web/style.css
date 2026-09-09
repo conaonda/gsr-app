@@ -182,3 +182,61 @@ input[type="text"]:focus, input[type="number"]:focus, select:focus { border-colo
 .timeline-bar { position: absolute; z-index: 1; top: 3px; min-width: 0; width: 12px; height: 20px; padding: 0; transform: translateX(-50%); border: 2px solid #081625; border-radius: 4px; cursor: pointer; opacity: .85; box-shadow: 0 0 0 1px rgba(149,187,211,.16); }
 .timeline-bar:hover, .timeline-bar.selected { width: 15px; height: 22px; opacity: 1; box-shadow: 0 0 0 2px rgba(85,227,193,.18); }
 .timeline-meta { display: flex; justify-content: space-between; gap: 8px; margin-top: 2px; color: #688391; font-size: 9px; font-variant-numeric: tabular-nums; }
+
+/* v0.2 source editor controls */
+.editor-toolbar { min-height: 47px; padding: 7px 9px; display: flex; align-items: center; flex-wrap: wrap; gap: 7px; border-color: rgba(85,227,193,.18); background: rgba(8, 24, 37, .86); }
+.tool-cluster { display: flex; align-items: center; gap: 3px; }
+.tool-cluster + .tool-cluster { padding-left: 8px; border-left: 1px solid var(--line); }
+.toolbar-label { margin: 0 3px 0 2px; color: #698592; font-size: 8px; font-weight: 800; letter-spacing: .12em; }
+.tool-button { min-height: 27px; padding: 5px 8px; border: 1px solid transparent; border-radius: 6px; background: transparent; color: var(--text-muted); cursor: pointer; font-size: 10px; font-weight: 700; white-space: nowrap; }
+.tool-button:hover:not(:disabled) { border-color: var(--line-strong); background: rgba(255,255,255,.035); color: var(--text-soft); }
+.tool-button.active, .tool-button[aria-pressed="true"] { border-color: rgba(85,227,193,.38); background: var(--teal-wash); color: var(--teal); }
+.tool-button:disabled { cursor: not-allowed; opacity: .36; }
+.tool-button kbd { margin-left: 3px; color: #62808d; font-size: 8px; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
+.subtle-tool { color: #91a9b8; }
+.toolbar-check { min-height: 27px; padding: 5px 6px; display: inline-flex; align-items: center; gap: 4px; border-radius: 6px; color: var(--text-muted); font-size: 9px; white-space: nowrap; cursor: pointer; }
+.toolbar-check:hover { background: rgba(255,255,255,.035); color: var(--text-soft); }
+.toolbar-check input { width: 12px; height: 12px; margin: 0; accent-color: var(--teal); }
+.validation-check { color: #b89b7e; }
+.validation-check input { accent-color: var(--amber); }
+.viewport-readout { min-width: 43px; margin-left: auto; color: var(--teal); font-size: 9px; font-variant-numeric: tabular-nums; text-align: right; }
+.source-wrap { touch-action: none; }
+.source-wrap canvas { object-fit: fill; cursor: crosshair; }
+.source-wrap[data-tool="select"] canvas { cursor: default; }
+.source-wrap[data-tool="pan"] canvas { cursor: grab; }
+.source-wrap[data-tool="pan"].is-panning canvas { cursor: grabbing; }
+.source-wrap[data-validation-mode="true"] canvas { cursor: crosshair; }
+.source-wrap[data-validation-mode="true"] .loupe { border-color: rgba(247,178,103,.7); }
+.loupe { position: absolute; z-index: 4; width: 188px; height: 211px; padding: 3px; display: grid; place-items: center; border: 1px solid rgba(85,227,193,.72); border-radius: 9px; background: rgba(4,13,23,.9); box-shadow: 0 12px 32px rgba(0,0,0,.4); pointer-events: none; transform: translate(12px, 12px); }
+.loupe canvas { width: 180px !important; height: 180px !important; border-radius: 6px; display: block; }
+.loupe span { color: var(--text-muted); font-size: 8px; font-variant-numeric: tabular-nums; line-height: 17px; }
+.point-table tr.selected-point { background: rgba(85,227,193,.07); }
+.point-table tr.validation-row.selected-point { background: rgba(247,178,103,.08); }
+.point-table tr.selected-point td:first-child { box-shadow: inset 2px 0 var(--teal); }
+.point-table tr.validation-row.selected-point td:first-child { box-shadow: inset 2px 0 var(--amber); }
+.source-card .canvas-card-header, .pitch-card .canvas-card-header { position: relative; z-index: 5; }
+.source-wrap[data-overlay-lines="false"]::after { content: "예측 선 숨김"; position: absolute; right: 8px; top: 8px; z-index: 3; padding: 3px 5px; border: 1px solid var(--line); border-radius: 4px; background: rgba(4,13,23,.68); color: #78919e; font-size: 8px; pointer-events: none; }
+.source-wrap[data-validation-mode="true"]::after { content: "독립 검증 모드 · 예측 오버레이 숨김"; left: 8px; right: auto; top: 8px; color: var(--amber); border-color: rgba(247,178,103,.35); }
+
+@media (max-width: 1050px) {
+  .editor-toolbar { align-items: flex-start; }
+  .overlay-cluster { width: 100%; padding-left: 0 !important; border-left: 0 !important; border-top: 1px solid var(--line); padding-top: 5px; }
+  .viewport-readout { margin-left: 0; }
+}
+
+@media (max-width: 600px) {
+  .editor-toolbar { gap: 4px; }
+  .tool-cluster { flex-wrap: wrap; }
+  .tool-cluster + .tool-cluster { padding-left: 5px; }
+  .toolbar-label { width: 100%; }
+  .viewport-cluster .toolbar-label { width: auto; }
+  .loupe { width: 150px; height: 172px; }
+  .loupe canvas { width: 144px !important; height: 144px !important; }
+}
+
+/* Give the source image the dominant working area in the desktop editor. */
+.canvas-grid { grid-template-columns: minmax(0, 2fr) 24px minmax(230px, 1fr); }
+
+@media (max-width: 860px) {
+  .canvas-grid { grid-template-columns: 1fr; }
+}

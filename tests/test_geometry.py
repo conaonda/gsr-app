@@ -128,12 +128,18 @@ def test_bad_held_out_validation_is_reviewed() -> None:
                 {"image": [480, 300], "pitch": [0.5, 0.5], "role": "validation"}
             ]
         ),
-        None,
+        {
+            "length": 105,
+            "width": 68,
+            "dimension_source": "manual",
+            "dimensions_verified": True,
+        },
         IMAGE_SIZE,
     )
 
     assert result["status"] == "review"
     assert result["matrix"] is not None
+    assert result["coordinate_level"] == "image"
     assert result["validation_error_px"] > 5.0
     assert "validation_error_exceeds_threshold" in result["reasons"]
 
@@ -195,3 +201,29 @@ def test_validation_outside_fit_hull_is_reviewed_even_with_low_residual() -> Non
     assert result["status"] == "review"
     assert result["matrix"] is not None
     assert "validation_outside_valid_region" in result["reasons"]
+
+
+def test_large_fit_set_uses_bounded_ransac_and_keeps_matrix() -> None:
+    random = np.random.default_rng(17)
+    image = np.column_stack(
+        [random.uniform(100.0, 860.0, 200), random.uniform(80.0, 460.0, 200)]
+    )
+    pitch = np.column_stack(
+        [(image[:, 0] - 100.0) / 760.0, (image[:, 1] - 80.0) / 380.0]
+    )
+    points = [
+        {"image": source.tolist(), "pitch": target.tolist(), "role": "fit"}
+        for source, target in zip(image, pitch)
+    ]
+    points.extend(
+        [
+            {"image": [480.0, 270.0], "pitch": [0.5, 0.5], "role": "validation"},
+            {"image": [500.0, 260.0], "pitch": [400.0 / 760.0, 180.0 / 380.0], "role": "validation"},
+        ]
+    )
+
+    result = estimate_registration(points, None, IMAGE_SIZE)
+
+    assert result["status"] == "usable"
+    assert result["matrix"] is not None
+    assert result["fit_error_px"] < 1e-5

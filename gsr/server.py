@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
+import hashlib
 import ipaddress
 import json
 import math
@@ -18,7 +19,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictInt
+from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictFloat, StrictInt
 from typing_extensions import Literal
 
 from .media import (
@@ -43,12 +44,13 @@ except ImportError:  # pragma: no cover - a clear error is raised on use
 # or player tracking.
 ANALYSIS_PROVENANCE = {
     "engine": "gsr.geometry",
-    "engine_version": "0.1.0",
-    "config_version": "p0-v1",
+    "engine_version": "0.2.0",
+    "config_version": "p0-v2",
     "schema_version": "gsr.registration.v1",
 }
 SESSION_EXPORT_SCHEMA_VERSION = "gsr.session.v1"
 MAX_PROPAGATION_STEPS = 30
+COORDINATE_ELIGIBILITY_POLICY_VERSION = "gsr.coordinate-eligibility.v2"
 
 
 class VideoPathRequest(BaseModel):
@@ -60,8 +62,8 @@ class VideoPathRequest(BaseModel):
 class FieldRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    length: float | None = Field(default=None, gt=0)
-    width: float | None = Field(default=None, gt=0)
+    length: StrictFloat | None = Field(default=None, gt=0)
+    width: StrictFloat | None = Field(default=None, gt=0)
     dimension_source: str = Field(default="", max_length=1000)
     dimensions_verified: StrictBool = False
 
@@ -69,8 +71,8 @@ class FieldRequest(BaseModel):
 class PointRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    image: list[float]
-    pitch: list[float]
+    image: list[StrictFloat]
+    pitch: list[StrictFloat]
     role: Literal["fit", "validation"]
 
 
@@ -81,6 +83,12 @@ class RegistrationRequest(BaseModel):
     field: FieldRequest
     points: list[PointRequest] = Field(min_length=1, max_length=200)
     note: str = Field(default="", max_length=10_000)
+
+
+class PreviewRegistrationRequest(RegistrationRequest):
+    """A registration draft with a required client-side revision token."""
+
+    draft_version: StrictInt = Field(ge=0)
 
 
 class PropagationRequest(BaseModel):
@@ -122,6 +130,19 @@ def _json_safe(value: Any) -> Any:
     return value
 
 
+def _source_revision(video: StoredVideo) -> str:
+    """Return an opaque, stable revision for the persisted source identity.
+
+    The database deliberately stores only the inexpensive source identity
+    (size and nanosecond mtime).  Hashing those values keeps the identity
+    useful to the browser's draft key without exposing a local path or making
+    the frontend depend on the representation of the identity fields.
+    """
+
+    identity = f"{video.info.file_size}:{video.info.file_mtime_ns}".encode("ascii")
+    return hashlib.sha256(identity).hexdigest()
+
+
 def _video_response(video: StoredVideo) -> dict[str, Any]:
     return {
         "id": video.id,
@@ -130,6 +151,7 @@ def _video_response(video: StoredVideo) -> dict[str, Any]:
         "height": video.info.height,
         "duration": video.info.duration,
         "time_base": video.info.time_base,
+        "source_revision": _source_revision(video),
     }
 
 
@@ -412,7 +434,7 @@ class SessionStore:
             field,
             str(row["note"]),
             str(row["source"]),
-            analysis,
+            _correct_historical_analysis(analysis),
             str(row["created_at"]),
         )
 
@@ -456,6 +478,62 @@ def _registration_response(
     }
     response.update(_json_safe(dict(analysis)))
     return response
+
+
+def _preview_response(
+    video_id: int,
+    frame: FrameInfo,
+    draft_version: int,
+    points: Any,
+    field: Any,
+    analysis: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Build a preview result without assigning persistence identity."""
+
+    response: dict[str, Any] = {
+        "video_id": video_id,
+        "frame_index": frame.index,
+        "pts": frame.pts,
+        "pts_source": frame.pts_source,
+        "time_seconds": frame.time_seconds,
+        "draft_version": draft_version,
+        "source": "preview",
+        "persisted": False,
+        "field": _json_safe(field),
+        "points": _json_safe(points),
+    }
+    response.update(_json_safe(dict(analysis)))
+    return response
+
+
+def _correct_historical_analysis(analysis: Any) -> dict[str, Any]:
+    """Apply the v0.2 eligibility policy when reading old analysis rows.
+
+    Analysis JSON is append-only: this function returns a copied response
+    object and never writes the corrected value back to SQLite.  Rows created
+    by v0.2 already have the correct value, so they do not receive a noisy
+    correction marker.
+    """
+
+    if not isinstance(analysis, Mapping):
+        return {"status": "unavailable", "coordinate_level": "image"}
+    result = dict(analysis)
+    status = result.get("status")
+    original_level = result.get("coordinate_level")
+    if status == "usable" or original_level == "image":
+        return result
+
+    correction = {
+        "field": "coordinate_level",
+        "original_value": original_level,
+        "corrected_value": "image",
+        "policy_version": COORDINATE_ELIGIBILITY_POLICY_VERSION,
+    }
+    result["coordinate_level"] = "image"
+    # The marker is intentionally top-level so consumers can distinguish a
+    # read-time policy correction from the historical geometry diagnostics.
+    result["eligibility_correction"] = correction
+    return result
 
 
 def _default_db_path() -> Path:
@@ -524,6 +602,10 @@ def _video_or_404(store: SessionStore, video_id: int) -> StoredVideo:
 
 def _validate_registration_payload(payload: RegistrationRequest, video: StoredVideo) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     field = payload.field.model_dump()
+    for name in ("length", "width"):
+        value = field.get(name)
+        if value is not None and not math.isfinite(float(value)):
+            raise HTTPException(status_code=422, detail=f"Field {name} must be finite")
     if field["dimensions_verified"] and (field["length"] is None or field["width"] is None):
         raise HTTPException(status_code=422, detail="Verified field dimensions require both length and width")
     points: list[dict[str, Any]] = []
@@ -565,17 +647,33 @@ def _run_geometry(points: list[dict[str, Any]], field: dict[str, Any], image_siz
     result.setdefault("sensitivity", None)
     if result["status"] not in {"usable", "review", "unavailable"}:
         result["status"] = "review"
+    if result["status"] != "usable":
+        # Keep this invariant at the API boundary as well as in geometry so a
+        # future engine or a legacy plugin cannot grant eligibility to a
+        # result that still needs review.
+        result["coordinate_level"] = "image"
     if not isinstance(result["reasons"], list):
         result["reasons"] = [str(result["reasons"])]
     result["analysis_provenance"] = dict(ANALYSIS_PROVENANCE)
     return result
 
 
+def _prepare_registration(
+    store: SessionStore, payload: RegistrationRequest, video: StoredVideo
+) -> tuple[FrameInfo, list[dict[str, Any]], dict[str, Any], dict[str, Any]]:
+    """Validate and calculate a registration through the shared save/preview path."""
+
+    frame = store.get_frame(video, payload.frame_index)
+    points, field = _validate_registration_payload(payload, video)
+    analysis = _run_geometry(points, field, (video.info.width, video.info.height))
+    return frame, points, field, analysis
+
+
 def create_app(db_path: str | Path | None = None) -> FastAPI:
     """Create an isolated API instance, useful for tests and embedding."""
 
     store = SessionStore(db_path if db_path is not None else _default_db_path())
-    app = FastAPI(title="GSR", version="0.1.0")
+    app = FastAPI(title="GSR", version="0.2.0")
     app.state.store = store
 
     @app.exception_handler(RequestValidationError)
@@ -624,14 +722,29 @@ def create_app(db_path: str | Path | None = None) -> FastAPI:
         store.assert_current(video)
         return store.list_registrations(video.id)
 
+    @app.post("/api/videos/{video_id}/registrations/preview")
+    def preview_registration(
+        video_id: int, payload: PreviewRegistrationRequest, request: Request
+    ) -> dict[str, Any]:
+        _require_local_mutation(request)
+        video = _video_or_404(store, video_id)
+        store.assert_current(video)
+        frame, points, field, analysis = _prepare_registration(store, payload, video)
+        return _preview_response(
+            video.id,
+            frame,
+            payload.draft_version,
+            points,
+            field,
+            analysis,
+        )
+
     @app.post("/api/videos/{video_id}/registrations")
     def create_registration(video_id: int, payload: RegistrationRequest, request: Request) -> dict[str, Any]:
         _require_local_mutation(request)
         video = _video_or_404(store, video_id)
         store.assert_current(video)
-        frame = store.get_frame(video, payload.frame_index)
-        points, field = _validate_registration_payload(payload, video)
-        analysis = _run_geometry(points, field, (video.info.width, video.info.height))
+        frame, points, field, analysis = _prepare_registration(store, payload, video)
         return store.add_registration(video.id, frame, points, field, payload.note, "manual", analysis)
 
     @app.get("/api/videos/{video_id}/export")

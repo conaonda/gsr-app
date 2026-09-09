@@ -10,9 +10,9 @@ BASE = os.environ.get('GSR_TEST_URL')
 pytestmark = pytest.mark.skipif(not BASE, reason='Set GSR_TEST_URL for running-server acceptance')
 
 
-def test_diagnostic_roundtrip():
+def test_diagnostic_roundtrip(tmp_path):
     from make_demo_video import make_video
-    path = make_video(Path(__file__).resolve().parents[1] / 'data' / 'acceptance.mp4')
+    path = make_video(tmp_path / 'acceptance.mp4')
     with httpx.Client(base_url=BASE, timeout=60) as client:
         response = client.post('/api/videos', json={'path': str(path)})
         assert response.status_code == 200, response.text

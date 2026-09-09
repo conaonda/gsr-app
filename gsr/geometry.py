@@ -19,7 +19,7 @@ canvas.
 
 from __future__ import annotations
 
-from itertools import combinations
+from itertools import combinations, islice
 from math import comb
 from typing import Any, Iterable, Mapping, Sequence
 
@@ -125,6 +125,8 @@ def _point(value: Any) -> tuple[np.ndarray | None, bool]:
         return None, False
     if len(values) < 2:
         return None, False
+    if any(isinstance(item, (bool, np.bool_)) for item in values[:2]):
+        return None, False
 
     try:
         result = np.asarray([values[0], values[1]], dtype=np.float64)
@@ -151,6 +153,11 @@ def _image_size(value: Any) -> tuple[float, float] | None:
         if len(values) < 2:
             return None
         width_value, height_value = values[0], values[1]
+
+    if isinstance(width_value, (bool, np.bool_)) or isinstance(
+        height_value, (bool, np.bool_)
+    ):
+        return None
 
     try:
         width = float(width_value)
@@ -300,7 +307,12 @@ def _dlt_fit(
     design = np.asarray(rows, dtype=np.float64)
 
     try:
-        _, singular_values, vh = np.linalg.svd(design, full_matrices=True)
+        # Four points produce an 8x9 design matrix and need the full Vh to
+        # expose its one-dimensional null space.  For an overdetermined fit,
+        # reduced SVD keeps Vh at 9x9 instead of allocating a large U matrix.
+        _, singular_values, vh = np.linalg.svd(
+            design, full_matrices=design.shape[0] < design.shape[1]
+        )
     except np.linalg.LinAlgError:
         return None, None, "ill_conditioned_geometry"
     if len(singular_values) < 8 or vh.shape[0] < 9:
@@ -546,27 +558,59 @@ def _robust_fit(
             reasons.append(reason)
         return matrix, np.ones(count, dtype=bool), reasons
 
+    # Keep hypothesis generation bounded and lazy.  In particular,
+    # ``list(combinations(range(200), 4))`` would allocate tens of millions of
+    # tuples before the first model could be evaluated.  A deterministic prefix
+    # gives stable coverage for ordered/manual points, then a seeded sample
+    # covers arbitrary order without depending on process-global RNG state.
     max_hypotheses = 512
-    hypotheses: list[tuple[int, int, int, int]] = []
     total = comb(count, 4)
-    if total <= max_hypotheses:
-        hypotheses = list(combinations(range(count), 4))
-    else:
-        # Deterministic coverage of the beginning of lexicographic combinations
-        # plus a seeded sample.  This avoids relying on a global random state.
-        hypotheses.extend(list(combinations(range(count), 4))[:64])
+
+    def iter_hypotheses() -> Iterable[tuple[int, int, int, int]]:
+        combination_iterator = combinations(range(count), 4)
+        if total <= max_hypotheses:
+            yield from islice(combination_iterator, max_hypotheses)
+            return
+
+        seen: set[tuple[int, int, int, int]] = set()
+        prefix_count = min(64, max_hypotheses)
+        for candidate in islice(combination_iterator, prefix_count):
+            typed = tuple(int(item) for item in candidate)
+            seen.add(typed)
+            yield typed
+
         random = np.random.default_rng(0)
-        seen = set(hypotheses)
-        while len(hypotheses) < max_hypotheses:
-            candidate = tuple(sorted(random.choice(count, size=4, replace=False)))
-            if candidate not in seen:
-                seen.add(candidate)
-                hypotheses.append(candidate)
+        attempts = 0
+        # Random draws are effectively unique for the large input sizes where
+        # this branch matters.  The bounded attempt count is a second guard in
+        # case a future change lowers the population or cap dramatically.
+        while len(seen) < max_hypotheses and attempts < max_hypotheses * 20:
+            attempts += 1
+            candidate = tuple(
+                sorted(int(item) for item in random.choice(count, size=4, replace=False))
+            )
+            if candidate in seen:
+                continue
+            seen.add(candidate)
+            yield candidate
+
+        # Complete the cap deterministically if random sampling happened to
+        # collide too often.  This iterator is consumed only until the cap,
+        # so it remains bounded even for a very large point set.
+        if len(seen) < max_hypotheses:
+            for candidate in combinations(range(count), 4):
+                typed = tuple(int(item) for item in candidate)
+                if typed in seen:
+                    continue
+                seen.add(typed)
+                yield typed
+                if len(seen) >= max_hypotheses:
+                    break
 
     best_matrix: np.ndarray | None = None
     best_mask = np.zeros(count, dtype=bool)
     best_score: tuple[int, float] = (-1, np.inf)
-    for indices in hypotheses:
+    for indices in iter_hypotheses():
         source = image_points[list(indices)]
         destination = pitch_points[list(indices)]
         candidate, _, _ = _dlt_fit(source, destination)
@@ -768,6 +812,10 @@ def _metric_level(field: Any) -> str:
         width = float(field.get("width"))
     except (TypeError, ValueError, OverflowError):
         return "normalized"
+    if isinstance(field.get("length"), (bool, np.bool_)) or isinstance(
+        field.get("width"), (bool, np.bool_)
+    ):
+        return "normalized"
     if (
         not np.isfinite([length, width]).all()
         or length <= 0.0
@@ -919,7 +967,11 @@ def estimate_registration(
     # review gates failed.  Only the fit and held-out validation gates grant
     # ``usable`` status.
     status = "usable" if not reasons else "review"
-    coordinate_level = _metric_level(field)
+    # A matrix can still be useful for inspection in ``review`` status, but
+    # metric/normalised eligibility is granted only after every usable gate
+    # passes.  Review and unavailable results are therefore image-only even
+    # when the caller supplied verified dimensions.
+    coordinate_level = _metric_level(field) if status == "usable" else "image"
     return _result(
         matrix=matrix,
         status=status,

@@ -101,7 +101,7 @@
               <button class="secondary-button" id="previousFrame" type="button" aria-label="이전 프레임">‹ 이전</button>
               <button class="secondary-button" id="nextFrame" type="button" aria-label="다음 프레임">다음 ›</button>
             </div>
-            <p class="field-hint frame-hint">프레임을 바꾸면 현재 미저장 대응점이 초기화됩니다.</p>
+            <p class="field-hint frame-hint">프레임별 미저장 대응점과 뷰포트를 보존하며, 돌아오면 복원합니다.</p>
           </section>
 
           <section class="panel export-panel" id="exportPanel" hidden>
@@ -141,6 +141,35 @@
               </div>
             </div>
 
+            <section class="editor-toolbar panel" id="editorToolbar" aria-label="편집 도구">
+              <div class="tool-cluster" role="group" aria-label="점 편집 도구">
+                <span class="toolbar-label">TOOLS</span>
+                <button class="tool-button active" id="toolSelect" data-tool="select" type="button" title="점 선택 및 이동">선택 <kbd>V</kbd></button>
+                <button class="tool-button" id="toolAddFit" data-tool="add-fit" type="button" title="FIT 대응점 추가">FIT 추가 <kbd>F</kbd></button>
+                <button class="tool-button" id="toolAddValidation" data-tool="add-validation" type="button" title="VALIDATION 대응점 추가">검증 추가 <kbd>G</kbd></button>
+                <button class="tool-button" id="toolPan" data-tool="pan" type="button" title="소스 뷰포트 이동">팬 <kbd>H</kbd></button>
+              </div>
+              <div class="tool-cluster viewport-cluster" role="group" aria-label="뷰포트 도구">
+                <span class="toolbar-label">VIEW</span>
+                <button class="tool-button" id="fitView" type="button" title="프레임에 맞추기">맞춤</button>
+                <button class="tool-button" id="oneToOneView" type="button" title="원본 픽셀 1:1 보기">1:1</button>
+                <button class="tool-button" id="zoomOutView" type="button" title="축소">−</button>
+                <button class="tool-button" id="zoomInView" type="button" title="확대">+</button>
+                <button class="tool-button" id="undoButton" type="button" title="실행 취소" disabled>↶</button>
+                <button class="tool-button" id="redoButton" type="button" title="다시 실행" disabled>↷</button>
+              </div>
+              <div class="tool-cluster overlay-cluster" role="group" aria-label="오버레이 표시">
+                <span class="toolbar-label">OVERLAY</span>
+                <label class="toolbar-check"><input id="overlayLinesToggle" type="checkbox" checked /><span>선</span></label>
+                <label class="toolbar-check"><input id="overlaySupportToggle" type="checkbox" checked /><span>지원 영역</span></label>
+                <label class="toolbar-check"><input id="overlayResidualToggle" type="checkbox" checked /><span>잔차</span></label>
+                <button class="tool-button subtle-tool" id="overlayRegionToggle" type="button" aria-pressed="true" title="지원 영역 표시">영역</button>
+                <label class="toolbar-check validation-check"><input id="independentValidationToggle" type="checkbox" /><span>독립 검증</span></label>
+                <label class="toolbar-check"><input id="loupeToggle" type="checkbox" /><span>루페</span></label>
+              </div>
+              <span class="viewport-readout" id="viewportReadout" aria-live="polite">100%</span>
+            </section>
+
             <div class="instruction-strip" id="instructionStrip">
               <span class="instruction-index">01</span>
               <div><strong>소스 프레임에서 점을 클릭</strong><span>선택한 지점의 대응점을 피치 좌표 평면에서 이어 클릭하세요.</span></div>
@@ -157,7 +186,8 @@
                   <span class="canvas-size" id="sourceCanvasSize">—</span>
                 </div>
                 <div class="canvas-wrap source-wrap" id="sourceWrap">
-                  <canvas id="sourceCanvas" aria-label="소스 프레임. 대응점을 클릭하세요."></canvas>
+                  <canvas id="sourceCanvas" tabindex="0" aria-label="소스 프레임. 대응점을 클릭하세요."></canvas>
+                  <div class="loupe" id="sourceLoupe" hidden><canvas id="loupeCanvas" width="180" height="180" aria-label="소스 확대 보기"></canvas><span id="loupeReadout">—</span></div>
                   <div class="canvas-overlay-message" id="sourceCanvasMessage">프레임을 불러오는 중입니다.</div>
                 </div>
                 <div class="canvas-footer"><span class="legend-point fit-legend"></span>FIT <span class="legend-point validation-legend"></span>VALIDATION <span class="native-note">좌표는 원본 픽셀 기준</span></div>
@@ -218,10 +248,10 @@
             </div>
             <div class="estimate-summary" id="estimateSummary"><span class="summary-placeholder">대응점을 지정하면 저장 전 품질 점검이 표시됩니다.</span></div>
             <div class="estimate-actions">
-              <button class="secondary-button" id="estimateButton" type="button">입력 조건 확인</button>
+              <button class="secondary-button" id="estimateButton" type="button">서버 미리보기</button>
               <button class="primary-button" id="saveButton" type="button" disabled>등록 저장</button>
             </div>
-            <p class="field-hint">입력 조건이 부족해도 저장할 수 있습니다. 서버 geometry가 실제 결과와 실패 사유를 계산합니다.</p>
+            <p class="field-hint">미리보기는 저장하지 않습니다. 저장할 때 서버가 같은 입력으로 다시 계산합니다.</p>
           </section>
 
           <section class="panel result-panel" id="resultPanel" hidden>
@@ -265,6 +295,7 @@
     </div>
 
     <template id="libraryItemTemplate"><button class="library-item" type="button"><span class="library-item-main"><strong></strong><small></small></span><span class="library-arrow">›</span></button></template>
+    <script src="/web/editor-core.js" defer></script>
     <script src="/web/app.js" defer></script>
   </body>
 </html>
