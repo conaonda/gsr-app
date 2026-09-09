@@ -2,6 +2,12 @@
 
 Scope: reference discussion PR-01 through PR-04: invariant fixes, real non-persisting preview, usable source editor, overlay/async integration. PR-05 media caching/continuous decode and v0.3 line/arc fitting remain follow-ups. Existing P0 APIs and stored observations remain readable.
 
+Follow-up status (2026-09-09): source-checked frame caching, exact-PTS seeking,
+index reuse and a named pitch-reference input are now implemented. The original
+first-bundle scope and ownership below are historical. See
+[the improvement plan](docs/improvement-plan.md) for evidence and remaining
+continuous-decoder/line-arc work.
+
 ## Shared interface
 
 - `POST /api/videos/{video_id}/registrations/preview` accepts existing registration input plus `draft_version` (nonnegative integer). Returns geometry fields plus `video_id`, `frame_index`, `pts`, `pts_source`, `time_seconds`, `draft_version`, `source:"preview"`, `persisted:false`, `field`, `points`, `analysis_provenance`; no database registration ID and no writes. Same validation/calculation as saving; existing save request stays compatible.

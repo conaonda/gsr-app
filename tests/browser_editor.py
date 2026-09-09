@@ -68,6 +68,8 @@ def wait_held(page, held):
 
 def exercise(page, video, client):
     errors = []
+    frame_requests = []
+    page.on('request', lambda r: frame_requests.append(r.url) if '/frame/' in r.url else None)
     page.on('pageerror', lambda error: errors.append(str(error)))
     page.goto(BASE)
     expect(page.locator('#apiStateText')).to_contain_text('연결', timeout=10000)
@@ -78,9 +80,12 @@ def exercise(page, video, client):
     video_id = record['id']
     ready(page)
     page.locator('#toolAddFit').click()
-    for image, pitch in [([100,80],[0,0]), ([860,80],[1,0]),
-                         ([860,460],[1,1]), ([100,460],[0,1])]:
-        add_pair(page, image, pitch)
+    expect(page.locator('#estimateButton')).to_be_disabled()
+    for image, landmark in [([100,80],'top-left'), ([860,80],'top-right'),
+                            ([860,460],'bottom-right'), ([100,460],'bottom-left')]:
+        page.mouse.click(*source_position(page, image))
+        page.locator('#pitchLandmark').select_option(landmark)
+        page.locator('#applyLandmark').click()
     expect(page.locator('#pointCount')).to_have_text('4')
     before = registration_count(client, video_id)
     page.locator('#estimateButton').click()
@@ -135,6 +140,7 @@ def exercise(page, video, client):
     ready(page)
     expect(page.locator('#pointCount')).to_have_text('6')
     expect(page.locator('#fieldLength')).to_have_value('60')
+    assert sum(url.endswith('/frame/0') for url in frame_requests) == 1, frame_requests
 
     # A pending old draft response must not restore the old quality.
     held = []
@@ -178,9 +184,10 @@ def exercise(page, video, client):
     page.unroute('**/registrations/preview', hold_preview)
     expect(page.locator('#pointCount')).to_have_text('0')
     expect(page.locator('#resultBody')).to_have_attribute('data-kind', 'empty')
-    expect(page.locator('#estimateButton')).to_be_enabled()
+    expect(page.locator('#estimateButton')).to_be_disabled()
     page.locator('#previousFrame').click()
     ready(page)
+    expect(page.locator('#estimateButton')).to_be_enabled()
 
     # Selecting an existing result on the same frame also cancels a pending
     # preview and restores a saved snapshot, without that reply replacing it.
@@ -214,6 +221,13 @@ def exercise(page, video, client):
     page.set_viewport_size({'width':390,'height':844})
     page.screenshot(path=str(ARTIFACTS/'editor-mobile.png'), full_page=True)
     assert page.evaluate('document.documentElement.scrollWidth<=innerWidth'), 'Mobile horizontal overflow'
+    # This is the generated fixture, never a user video. Even a browser-cached
+    # adjacent frame must revalidate its source before showing old pixels.
+    with video.open('ab') as changed_source:
+        changed_source.write(b'changed-fixture')
+    page.locator('#nextFrame').click()
+    expect(page.locator('#globalAlertText')).to_contain_text('changed after it was indexed')
+    expect(page.locator('#sourceCanvasMessage')).to_be_visible()
     assert not errors, errors
     return video_id
 

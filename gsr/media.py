@@ -252,11 +252,15 @@ def probe_video(path: str | Path) -> VideoInfo:
             FFPROBE,
             "-v",
             "error",
+            "-threads",
+            "0",
             "-select_streams",
             "v:0",
             "-show_streams",
             "-show_format",
             "-show_frames",
+            "-show_entries",
+            "stream:format=duration:frame=media_type,pts,pts_time,best_effort_timestamp,best_effort_timestamp_time",
             "-of",
             "json",
             str(resolved),
@@ -314,6 +318,9 @@ def probe_video(path: str | Path) -> VideoInfo:
             frames.append(FrameInfo(index=len(frames), pts=pts, time_seconds=seconds, pts_source=pts_source))
     if not frames:
         raise MediaError("Video stream contains no timestamped decoded frames")
+
+    if current_file_identity(resolved) != (stat.st_size, stat.st_mtime_ns):
+        raise MediaError("Video changed while indexing; try adding it again")
 
     # A stream duration can be absent or can be less useful than the last PTS
     # for VFR inputs.  Keep the probe's duration when present; infer only when

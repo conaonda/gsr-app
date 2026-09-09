@@ -235,6 +235,14 @@ input[type="text"]:focus, input[type="number"]:focus, select:focus { border-colo
 }
 
 /* Give the source image the dominant working area in the desktop editor. */
+.landmark-controls { padding: 10px; display: grid; gap: 8px; }
+.landmark-controls label { color: var(--text-soft); font-size: 11px; }
+.landmark-controls select { width: 100%; min-width: 0; padding: 8px; color: var(--text-soft); background: #091824; border: 1px solid var(--line); border-radius: 6px; }
+.landmark-controls button { width: 100%; }
+.landmark-controls .field-hint { margin: 0; }
+.registration-help { margin-top: 12px; padding: 12px; color: var(--text-muted); font-size: 12px; line-height: 1.7; }
+.registration-help summary { cursor: pointer; color: var(--text-soft); }
+.registration-help p { margin: 9px 0 0; }
 .canvas-grid { grid-template-columns: minmax(0, 2fr) 24px minmax(230px, 1fr); }
 
 @media (max-width: 860px) {

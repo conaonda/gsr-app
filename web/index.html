@@ -197,7 +197,7 @@
 
               <section class="canvas-card pitch-card">
                 <div class="canvas-card-header">
-                  <div><span class="canvas-index">B</span><div><h3>피치 좌표 평면</h3><p>정규화 좌표 · 0–1</p></div></div>
+                  <div><span class="canvas-index">B</span><div><h3>풋살장 기준도</h3><p>위에서 본 경기장 · 0–1</p></div></div>
                   <span class="canvas-size">NORMALIZED</span>
                 </div>
                 <div class="canvas-wrap pitch-wrap">
@@ -205,9 +205,21 @@
                   <div class="pitch-axis axis-x">x 0 → 1</div>
                   <div class="pitch-axis axis-y">y 0 → 1</div>
                 </div>
-                <div class="canvas-footer"><span class="legend-line projected-legend"></span>추정 투영선 <span class="native-note">실제 규격은 선택 입력</span></div>
+                <div class="landmark-controls">
+                  <label for="pitchLandmark">원본에서 점을 찍고 같은 기준점을 선택하세요</label>
+                  <select id="pitchLandmark" aria-label="경기장 기준점"></select>
+                  <button id="applyLandmark" type="button" class="secondary-button" disabled>선택한 기준점과 연결</button>
+                  <p class="field-hint">코너·중앙선·중심점은 고정 비율 좌표입니다. 점선 원·페널티 영역·골대는 규격 미확인 참고 그림이며 기준점으로 자동 지정하지 않습니다.</p>
+                </div>
               </section>
             </div>
+
+            <details class="registration-help panel">
+              <summary>경기장 일부만 보이거나 기준점을 찾기 어렵나요?</summary>
+              <p>선이 선명한 프레임을 먼저 선택하세요. 코너, 중앙선과 터치라인의 교차점, 중심점처럼 실제 위치가 분명한 지면 점을 원본과 기준도에서 같은 순서로 연결합니다.</p>
+              <p>최소 4개 적합점이 넓게 퍼져 있어야 하며, 같은 직선 위의 점만으로는 계산할 수 없습니다. 화면 모서리나 선수·공의 위치를 경기장 코너로 지정하면 안 됩니다.</p>
+              <p>네 점을 확보할 수 없다면 다른 프레임에서 시작해야 합니다. 현재 버전은 선·원호만으로 정합하지 않습니다. 적합에 쓰지 않은 별도 검증점도 필요합니다.</p>
+            </details>
 
             <section class="point-editor panel">
               <div class="panel-heading compact-heading">
@@ -296,6 +308,7 @@
 
     <template id="libraryItemTemplate"><button class="library-item" type="button"><span class="library-item-main"><strong></strong><small></small></span><span class="library-arrow">›</span></button></template>
     <script src="/web/editor-core.js" defer></script>
+    <script src="/web/pitch-reference.js" defer></script>
     <script src="/web/app.js" defer></script>
   </body>
 </html>

@@ -22,12 +22,13 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictFloat, StrictInt
 from typing_extensions import Literal
 
+from .frame_cache import FrameCache, extract_indexed_frame
+
 from .media import (
     FrameInfo,
     MediaError,
     VideoInfo,
     current_file_identity,
-    extract_frame,
     probe_video,
     propagate_ground_points,
 )
@@ -337,6 +338,18 @@ class SessionStore:
             if row is None:  # pragma: no cover - SQLite guarantees this
                 raise MediaError("Could not persist video metadata")
             return self._info_from_row(row)
+
+    def find_current_video(self, path: str) -> StoredVideo | None:
+        # Validate path and identity before trusting an old persisted index.
+        size, mtime_ns = current_file_identity(path)
+        resolved = str(Path(path).resolve())
+        with self._lock, self._connect() as connection:
+            row = connection.execute(
+                "SELECT * FROM videos WHERE path = ? AND source_size = ? "
+                "AND source_mtime_ns = ? ORDER BY id DESC LIMIT 1",
+                (resolved, size, mtime_ns),
+            ).fetchone()
+        return self._info_from_row(row) if row is not None else None
 
     def list_videos(self) -> list[StoredVideo]:
         with self._lock, self._connect() as connection:
@@ -673,8 +686,9 @@ def create_app(db_path: str | Path | None = None) -> FastAPI:
     """Create an isolated API instance, useful for tests and embedding."""
 
     store = SessionStore(db_path if db_path is not None else _default_db_path())
-    app = FastAPI(title="GSR", version="0.2.0")
+    app = FastAPI(title="GSR", version="0.2.1")
     app.state.store = store
+    app.state.frame_cache = FrameCache()
 
     @app.exception_handler(RequestValidationError)
     async def validation_exception_handler(_request: Request, exc: RequestValidationError) -> JSONResponse:
@@ -693,8 +707,10 @@ def create_app(db_path: str | Path | None = None) -> FastAPI:
     def add_video(payload: VideoPathRequest, request: Request) -> dict[str, Any]:
         _require_local_mutation(request)
         try:
-            info = probe_video(payload.path)
-            video = store.add_video(info)
+            video = store.find_current_video(payload.path)
+            if video is None:
+                info = probe_video(payload.path)
+                video = store.add_video(info)
         except MediaError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         return _video_response(video)
@@ -705,16 +721,33 @@ def create_app(db_path: str | Path | None = None) -> FastAPI:
         store.assert_current(video)
         return [_frame_response(frame) for frame in video.info.frames]
 
+    @app.get("/api/videos/{video_id}/source")
+    def check_source(video_id: int) -> Response:
+        video = _video_or_404(store, video_id)
+        store.assert_current(video)
+        return JSONResponse({"source_revision": _source_revision(video)},
+                            headers={"Cache-Control": "no-store"})
+
     @app.get("/api/videos/{video_id}/frame/{frame_index}")
     def get_frame(video_id: int, frame_index: int) -> Response:
         video = _video_or_404(store, video_id)
         store.assert_current(video)
         store.get_frame(video, frame_index)
         try:
-            encoded = extract_frame(video.info.path, frame_index)
+            def load() -> bytes:
+                data = extract_indexed_frame(video.info, frame_index)
+                store.assert_current(video)
+                return data
+
+            encoded, cached = app.state.frame_cache.get(
+                (str(video.info.path), _source_revision(video), frame_index), load
+            )
         except MediaError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
-        return Response(content=encoded, media_type="image/png")
+        return Response(content=encoded, media_type="image/png", headers={
+            "Cache-Control": "no-store",
+            "X-GSR-Frame-Cache": "hit" if cached else "miss",
+        })
 
     @app.get("/api/videos/{video_id}/registrations")
     def list_registrations(video_id: int) -> list[dict[str, Any]]:

@@ -2,7 +2,7 @@
 
 ## Implemented scope
 
-The first bundle from the design discussion covers PR-01 through PR-04: coordinate eligibility and bounded computation, non-persisting preview, source editing, and inverse-projected overlays. The existing SQLite schema and point observations remain readable. Media caching/continuous decoding (PR-05), line/arc observation contracts and player tracking remain follow-ups.
+The first bundle from the design discussion covers PR-01 through PR-04: coordinate eligibility and bounded computation, non-persisting preview, source editing, and inverse-projected overlays. The existing SQLite schema and point observations remain readable. A subsequent improvement adds the pitch reference, source-checked caches and exact-PTS seeking described in [the improvement plan](improvement-plan.md). A persistent decoder, line/arc observation contracts and player tracking remain follow-ups.
 
 ## Automated evidence
 
@@ -54,4 +54,4 @@ the local ignored artifact `data/real-video-qa/RESULTS.md`.
 
 Use three repeatable tasks on selected frames: create an initial registration, correct a deliberately misplaced point, and visit adjacent frames then return. Record human interaction time separately from system waiting time, correction count, abandoned registrations and independent validation error. Real pitch coordinates must come from independent field evidence; the estimated transform cannot serve as its own ground truth.
 
-The draft targets of cached-frame switching within 300 ms and preview within 1 s are not performance guarantees. PR-05 caching is not in this bundle. Establish baseline/new measurements on the same local clip before confirming release-level usability or accuracy claims.
+The draft targets of cached-frame switching within 300 ms and preview within 1 s are not performance guarantees. The subsequent cache/seek change measured 0.121–0.135 seconds for returning to a cached frame and 0.884–0.893 seconds for selected uncached frames on this clip. First import was 16.830 seconds. Frames 150, 2700 and 5100 matched sequential decoding pixel-for-pixel. See [the before/after measurements and remaining work](improvement-plan.md) for the test scope; this does not establish real-field registration accuracy.

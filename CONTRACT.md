@@ -6,6 +6,7 @@ API JSON unless stated:
 - GET /api/videos -> array video records {id,name,width,height,duration,time_base}
 - POST /api/videos {path} -> video record. Local absolute path, ffprobe actual PTS indexing.
 - GET /api/videos/{id}/frames -> array {index,pts,time_seconds}
+- GET /api/videos/{id}/source -> {source_revision}; rechecks source identity without image transfer, returns 409 for changed/missing files.
 - GET /api/videos/{id}/frame/{index} -> PNG
 - GET /api/videos/{id}/registrations -> array saved registration results
 - POST /api/videos/{id}/registrations {frame_index,field:{length:null,width:null,dimension_source:"",dimensions_verified:false},points:[{image:[x,y],pitch:[x,y],role:"fit"|"validation"}],note:""} -> saved result
@@ -30,3 +31,11 @@ Preview responses apply only when video ID, frame index and draft version still 
 The geometry and server boundaries both enforce `status != usable => coordinate_level == image`. Historical responses receive an `eligibility_correction` object when required: `{field:"coordinate_level",original_value,corrected_value:"image",policy_version:"gsr.coordinate-eligibility.v2"}`. This is a read-time policy correction, not a reassessment of geometry; the original analysis JSON and historical engine provenance remain unchanged. The retained matrix is for inspection and overlays, not permission to use a rejected result for spatial analysis.
 
 RANSAC hypotheses remain deterministic and capped at 512; the combinatorial iterator is consumed lazily. Four-point DLT retains the underdetermined null-space basis; larger systems use reduced SVD. Quality thresholds are unchanged.
+
+## Frame cache and pitch reference follow-up
+
+An unchanged path/size/mtime reuses the persisted frame index on import. Indexing still decodes all frames and records actual PTS; it uses decoder threads and a reduced metadata field set. Fast image extraction is allowed only for a strictly increasing, nonnegative original-PTS index within the filter's exact integer range. Seeking preserves timestamps and selects the exact PTS; ambiguous indexes or failed seeks use the sequential decoded-index path.
+
+The server keeps a 32-entry/128 MiB PNG LRU, keyed by canonical source path, source revision and frame index; duplicate pending misses share a decode. The browser keeps at most 8 decoded images with a 96 MiB compressed-plus-RGBA estimate, keyed by video/revision/frame. Active images and in-flight operations are outside those cache residency bounds. Cached browser access first checks `/source`; the cache never substitutes for source identity validation. Frame/source HTTP responses use `no-store` so ordinary HTTP caching cannot bypass that validation. Frame responses expose `X-GSR-Frame-Cache:hit|miss` for diagnostics. No cache data is persisted in the session database.
+
+Named pitch landmarks produce only invariant normalized coordinates: four corners, two halfway/touchline intersections and the center. Circle, penalty-area and goal drawings are illustrative, cannot be selected as named coordinate evidence and never imply verified dimensions. Existing free point input, independent validation and eligibility gates remain unchanged.

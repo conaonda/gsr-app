@@ -163,6 +163,8 @@
     sliderPreviewIndex: null,
     sourceImage: null,
     sourceObjectUrl: null,
+    frameImages: new Map(),
+    frameImageBytes: 0,
     sourceSize: { width: 0, height: 0 },
     pairs: [],
     mode: "fit",
@@ -265,6 +267,8 @@
       "sourceCanvasMessage",
       "sourceCanvasSize",
       "pitchCanvas",
+      "pitchLandmark",
+      "applyLandmark",
       "pointCount",
       "pointTableBody",
       "fieldPanel",
@@ -366,7 +370,8 @@
     if (els.saveButton)
       els.saveButton.disabled = state.busy.has("save") || !canSave();
     if (els.estimateButton)
-      els.estimateButton.disabled = state.busy.has("preview");
+      els.estimateButton.disabled =
+        state.busy.has("preview") || !state.sourceImage || !state.pairs.length;
     if (els.propagateButton)
       els.propagateButton.disabled =
         state.busy.has("propagate") || !state.savedResult;
@@ -772,6 +777,8 @@
     }
     els.estimateSummary.append(reasons);
     els.saveButton.disabled = state.busy.has("save") || !canSave();
+    els.estimateButton.disabled =
+      state.busy.has("preview") || !state.sourceImage || !state.pairs.length;
   }
   function collectField() {
     return {
@@ -1182,6 +1189,7 @@
     context.restore();
   }
   function renderPitchCanvas() {
+    els.applyLandmark.disabled = !state.pendingImage || state.busy.has("frame");
     const configured = configureCanvas(els.pitchCanvas, 600, 390);
     const context = configured.context;
     const m = pitchCanvasMetrics();
@@ -1193,7 +1201,7 @@
     context.strokeStyle = "rgba(107,227,201,.48)";
     context.lineWidth = 1;
     context.strokeRect(m.padX, m.padY, m.innerWidth, m.innerHeight);
-    context.strokeStyle = "rgba(107,227,201,.17)";
+    context.strokeStyle = "rgba(107,227,201,.07)";
     context.lineWidth = 1;
     for (let i = 1; i < 10; i += 1) {
       const x = m.padX + (m.innerWidth * i) / 10;
@@ -1212,6 +1220,32 @@
     context.moveTo(m.padX + m.innerWidth / 2, m.padY);
     context.lineTo(m.padX + m.innerWidth / 2, m.padY + m.innerHeight);
     context.stroke();
+    const reference = window.GSRPitchReference.buildPitchReference(state.field);
+    context.save();
+    for (const path of reference.paths) {
+      context.strokeStyle = path.illustrative
+        ? "rgba(226,238,228,.6)"
+        : "#c6e5d5";
+      context.lineWidth = path.illustrative ? 1.5 : 2;
+      context.setLineDash(path.illustrative ? [5, 4] : []);
+      context.beginPath();
+      path.points.forEach((point, i) => {
+        const p = pitchToCanvas(point);
+        if (i === 0) context.moveTo(p.x, p.y);
+        else context.lineTo(p.x, p.y);
+      });
+      context.stroke();
+    }
+    context.setLineDash([]);
+    for (const landmark of reference.landmarks) {
+      const p = pitchToCanvas(landmark.point);
+      const selected = landmark.id === els.pitchLandmark.value;
+      context.fillStyle = selected ? "#ffc47c" : "#c6e5d5";
+      context.beginPath();
+      context.arc(p.x, p.y, selected ? 5 : 2.5, 0, Math.PI * 2);
+      context.fill();
+    }
+    context.restore();
     const display = state.preview || state.savedResult;
     const predictive = Boolean(display && !state.independentValidation);
     if (
@@ -1463,7 +1497,7 @@
       const empty = document.createElement("div");
       empty.className = "subtle-empty";
       empty.textContent =
-        "저장된 결과가 없습니다. 입력 조건 확인으로 서버 미리보기를 실행하세요.";
+        "원본의 지면 기준점을 경기장 기준도와 연결한 뒤 서버 미리보기를 실행하세요.";
       els.resultBody.append(empty);
       els.resultSource.textContent = "—";
       return;
@@ -1818,7 +1852,7 @@
       els.emptyState.hidden = true;
       els.analysisStage.hidden = false;
       els.sourceCanvasMessage.textContent =
-        "영상 메타데이터와 실제 PTS 프레임을 확인하는 중입니다.";
+        "프레임 시각을 확인하고 있습니다. 처음 등록하는 영상은 길이에 따라 시간이 걸릴 수 있습니다.";
       els.sourceCanvasMessage.hidden = false;
     }
     try {
@@ -1917,6 +1951,8 @@
   async function loadFrameImage(index, serial = state.requestSerial) {
     if (!state.video || !state.frames[index]) return;
     const videoId = String(state.video.id);
+    const revision = state.sourceRevision;
+    const key = draftKeyFor(videoId, revision, index);
     const frameSerial = ++state.frameSerial;
     const imageSerial = ++state.imageSerial;
     setBusy("frame", true);
@@ -1925,51 +1961,74 @@
     els.sourceCanvasMessage.hidden = false;
     const current = () =>
       String(state.video?.id) === videoId &&
+      state.sourceRevision === revision &&
       frameSerial === state.frameSerial &&
       imageSerial === state.imageSerial;
     try {
-      const response = await apiFetch(
-        `/api/videos/${encodeURIComponent(videoId)}/frame/${encodeURIComponent(index)}`,
-      );
-      const blob = await response.blob();
-      if (!current()) return;
-      const objectUrl = URL.createObjectURL(blob);
-      const image = new Image();
-      image.decoding = "async";
-      image.onload = () => {
-        if (!current()) {
+      let cached = state.frameImages.get(key);
+      if (cached) {
+        // Cached pixels must not hide deletion/replacement of the source.
+        const source = await getJson(`/api/videos/${videoId}/source`);
+        if (source.source_revision !== revision)
+          throw new Error("원본 영상이 변경되었습니다.");
+        if (!current()) return;
+        state.frameImages.delete(key);
+        state.frameImages.set(key, cached);
+      } else {
+        const response = await apiFetch(
+          `/api/videos/${encodeURIComponent(videoId)}/frame/${encodeURIComponent(index)}`,
+        );
+        const blob = await response.blob();
+        if (!current()) return;
+        const objectUrl = URL.createObjectURL(blob);
+        const image = new Image();
+        image.decoding = "async";
+        try {
+          image.src = objectUrl;
+          await image.decode();
+        } finally {
           URL.revokeObjectURL(objectUrl);
-          return;
         }
-        if (state.sourceObjectUrl) URL.revokeObjectURL(state.sourceObjectUrl);
-        state.sourceObjectUrl = objectUrl;
-        state.sourceImage = image;
-        state.sourceSize = {
-          width: image.naturalWidth,
-          height: image.naturalHeight,
+        if (!current()) return;
+        cached = {
+          image,
+          bytes: image.naturalWidth * image.naturalHeight * 4 + blob.size,
         };
-        els.sourceWrap.style.aspectRatio = `${image.naturalWidth} / ${image.naturalHeight}`;
-        state.currentFrameIndex = index;
-        state.sliderPreviewIndex = null;
-        els.frameSlider.value = String(index);
-        ensureViewport(true);
-        els.sourceCanvasMessage.hidden = true;
-        renderAll();
-        setBusy("frame", false);
-      };
-      image.onerror = () => {
-        URL.revokeObjectURL(objectUrl);
-        if (current()) {
-          showAlert("프레임 이미지를 해석하지 못했습니다.");
-          setBusy("frame", false);
+        if (cached.bytes <= 96 * 1024 * 1024) {
+          state.frameImages.set(key, cached);
+          state.frameImageBytes += cached.bytes;
+          while (
+            state.frameImageBytes > 96 * 1024 * 1024 ||
+            state.frameImages.size > 8
+          ) {
+            const oldest = state.frameImages.keys().next().value;
+            state.frameImageBytes -= state.frameImages.get(oldest).bytes;
+            state.frameImages.delete(oldest);
+          }
         }
+      }
+      if (!current()) return;
+      const image = cached.image;
+      state.sourceImage = image;
+      state.sourceSize = {
+        width: image.naturalWidth,
+        height: image.naturalHeight,
       };
-      image.src = objectUrl;
+      els.sourceWrap.style.aspectRatio = `${image.naturalWidth} / ${image.naturalHeight}`;
+      state.currentFrameIndex = index;
+      state.sliderPreviewIndex = null;
+      els.frameSlider.value = String(index);
+      ensureViewport(true);
+      els.sourceCanvasMessage.hidden = true;
+      renderAll();
     } catch (error) {
       if (current()) {
         showAlert(`프레임을 불러오지 못했습니다: ${error.message}`);
-        setBusy("frame", false);
+        els.sourceCanvasMessage.textContent =
+          "프레임을 불러오지 못했습니다. 원본 경로를 확인해 주세요.";
       }
+    } finally {
+      if (current()) setBusy("frame", false);
     }
   }
   async function selectFrame(
@@ -2798,6 +2857,24 @@
 
   async function init() {
     cacheElements();
+    for (const landmark of window.GSRPitchReference.buildPitchReference()
+      .landmarks) {
+      const option = document.createElement("option");
+      option.value = landmark.id;
+      option.textContent = landmark.name;
+      els.pitchLandmark.append(option);
+    }
+    els.pitchLandmark.addEventListener("change", renderPitchCanvas);
+    els.applyLandmark.addEventListener("click", () => {
+      if (!state.pendingImage || !state.sourceImage || state.busy.has("frame"))
+        return;
+      const landmark =
+        window.GSRPitchReference.buildPitchReference().landmarks.find(
+          (item) => item.id === els.pitchLandmark.value,
+        );
+      if (landmark)
+        completePendingPair({ x: landmark.point[0], y: landmark.point[1] });
+    });
     bindEvents();
     clearSessionState();
     updateMode("fit");

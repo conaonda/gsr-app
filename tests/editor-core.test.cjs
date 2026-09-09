@@ -2,6 +2,18 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const {buildPitchReference} = require('../web/pitch-reference.js');
+
+test('named landmarks never inherit illustrative circle or penalty dimensions', () => {
+  const defaults = buildPitchReference();
+  const custom = buildPitchReference({length:60, width:30});
+  assert.deepEqual(custom.landmarks, defaults.landmarks);
+  assert.deepEqual(custom.landmarks.find(p => p.id === 'half-top').point, [.5, 0]);
+  assert.deepEqual(custom.landmarks.find(p => p.id === 'center').point, [.5, .5]);
+  assert.equal(custom.landmarks.length, 7);
+  assert.notDeepEqual(custom.paths.filter(p => p.illustrative), defaults.paths.filter(p => p.illustrative));
+  assert.equal(custom.paths.filter(p => !p.illustrative).length, 2);
+});
 const {
   Viewport,
   project,
