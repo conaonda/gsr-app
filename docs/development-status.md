@@ -1,6 +1,6 @@
 # 개발 현황과 다음 단계
 
-기준: `master` @ `cc6caf6` (`Document real video evaluation findings`)
+기준: 2026-09-09 PR-05 및 기준점 입력 후속 구현. 최초 현황 기준은 `cc6caf6`이며, 아래 상태는 후속 변경을 반영한다.
 
 이 문서는 P0 구현 이후 논의한 개발 계획이 현재 저장소에 어느 정도 반영되었는지 정리하고, 다음 개발 순서를 고정하기 위한 상태 문서다. 세부 API 계약은 `CONTRACT.md`, v0.2 구현 범위는 `V02_IMPLEMENTATION.md`, 실제 영상 평가 결과는 `docs/v02-evaluation.md`를 우선한다.
 
@@ -14,9 +14,9 @@
 | PR-02 비저장 정합 API | 완료 | `POST /api/videos/{id}/registrations/preview`, `draft_version`, 저장/미리보기 공통 계산 경로 |
 | PR-03 원본 정합 편집기 | 완료 | zoom/pan/fit/1:1, 점 선택·드래그·키보드 미세조정, undo/redo, 프레임별 초안 |
 | PR-04 원본 오버레이·비동기 통합 | 완료 | inverse homography 기반 원본 오버레이, support/line/residual 토글, stale preview 방어, 독립 검증 모드 |
-| PR-05 프레임 접근·연속 디코딩·캐시 | 미구현 | 현재 media layer는 기존 정확한 프레임 추출 경로 유지 |
+| PR-05 프레임 접근·연속 디코딩·캐시 | 구현 | 정확한 PTS 탐색·순차 fallback, 제한 캐시, 전파 구간 디코딩, 탐색용 썸네일. 상주 디코더·선행 로딩은 후속 |
 | PR-06 실제 영상 평가·CI | 대부분 완료 | `tests/run_checks.py`, GitHub Actions, 실제 경기 영상 1차 평가 문서화 |
-| v0.3 의미 기반 관측 | 미구현 | semantic landmark, point+line, arc, semi-auto snap은 후속 |
+| v0.3 의미 기반 관측 | 계약 확장 예정 | 불변 좌표 기준점 7개의 선택 UI는 반영. feature ID 저장·point+line·arc·snap은 후속 |
 | P1 선수 추적·검색 | 미구현 | 영상 좌표 기반 player detection/tracking/search는 후속 |
 
 ## 반영된 핵심 설계 결정
@@ -67,10 +67,10 @@ zoom/pan은 저장되는 관측 좌표를 변경하지 않는다.
 
 문서화된 2026-09-09 로컬 격리 실행에서는 다음이 통과했다.
 
-- Python 테스트 20개
-- Node editor-core 테스트 11개
+- Python 테스트 29개
+- Node editor-core 및 기준점 테스트 12개
 - JavaScript syntax validation
-- Chromium DPR 2 편집 흐름
+- Chromium DPR 2 편집 흐름 및 모바일 썸네일 탐색
 
 이는 합성 fixture를 대상으로 한 기능 검증이며 실제 경기 정합 정확도 보장은 아니다.
 
@@ -94,15 +94,15 @@ zoom/pan은 저장되는 관측 좌표를 변경하지 않는다.
 
 ### 1. PR-05: media access 개선
 
-가장 먼저 프레임 탐색과 전파의 대기시간을 줄인다. 단, 기존의 정확한 프레임/PTS 대응을 기준 구현으로 유지한다.
+프레임 탐색과 전파의 대기시간을 줄이는 구현을 반영했다. 기존의 정확한 프레임/PTS 대응을 기준 구현으로 유지한다. 측정과 자원 한도는 [개선 반영 결과](improvement-plan.md)를 참고한다.
 
 우선순위:
 
-1. 연속 구간을 한 번의 디코딩 세션으로 읽는 frame provider 추가
-2. 주변 프레임 제한 캐시 도입
-3. 탐색용 thumbnail과 정밀 입력용 원본 프레임 분리
-4. 기존 추출 경로와 새 경로의 frame/PTS 동등성 테스트
-5. 필요 시 그 이후에만 seek 최적화 검토
+1. 반영: 최대 30단계 전파를 제한된 연속 디코딩 창으로 읽는 frame provider
+2. 반영: 서버·브라우저 제한 캐시. 인접 프레임 선행 로딩은 후속
+3. 반영: 대표 장면 thumbnail과 정밀 입력용 원본 프레임 분리
+4. 반영: 기존 추출 경로와 새 경로의 frame/PTS 동등성 테스트
+5. 반영: 원본 PTS가 명확한 경우에만 seek, 실패하면 순차 디코딩
 
 성능 개선 때문에 VFR, B-frame, 회전 메타데이터에서 원본 프레임 대응이 깨지지 않아야 한다.
 
@@ -187,11 +187,13 @@ v0.2 first bundle
   └─ 실제 영상 1차 평가                      완료
 
 v0.2 remaining
-  └─ media cache / continuous decode           다음 우선순위
+  ├─ media cache / bounded continuous decode   완료
+  ├─ exact PTS seek / scene thumbnails         완료
+  └─ persistent decoder / editor prefetch     후속 측정
 
 v0.3
   ├─ observation contract v2                  예정
-  ├─ semantic landmark                        예정
+  ├─ semantic landmark                        선택 UI 반영, 계약 확장 예정
   ├─ point + line                             예정
   ├─ line snap                                예정
   └─ arc / auto candidate                     실험

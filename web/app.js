@@ -269,6 +269,8 @@
       "pitchCanvas",
       "pitchLandmark",
       "applyLandmark",
+      "sceneBrowser",
+      "thumbnailStrip",
       "pointCount",
       "pointTableBody",
       "fieldPanel",
@@ -1684,7 +1686,29 @@
     if (els.redoButton)
       els.redoButton.disabled = !history?.canRedo || state.busy.has("frame");
   }
+  function renderThumbnails() {
+    const key = `${state.video?.id}:${state.sourceRevision}:${state.frames.length}`;
+    if (els.thumbnailStrip.dataset.sourceKey === key) return;
+    els.thumbnailStrip.replaceChildren();
+    els.thumbnailStrip.dataset.sourceKey = key;
+    if (!state.video || !state.frames.length) return;
+    for (const index of new Set([0, .25, .5, .75, 1].map(ratio => Math.round(ratio * (state.frames.length - 1))))) {
+      const button = document.createElement("button");
+      button.type = "button";
+      const image = document.createElement("img");
+      image.loading = "lazy";
+      image.alt = `프레임 ${index}`;
+      image.src = `/api/videos/${state.video.id}/thumbnail/${index}`;
+      const caption = document.createElement("span");
+      caption.textContent = formatTime(state.frames[index].time_seconds);
+      image.addEventListener("error", () => { caption.textContent = "미리보기 로딩 실패"; });
+      button.append(image, caption);
+      button.addEventListener("click", () => selectFrame(index));
+      els.thumbnailStrip.append(button);
+    }
+  }
   function renderAll() {
+    if (els.sceneBrowser.open) renderThumbnails();
     renderVideoMeta();
     renderFrameReadout();
     renderSourceCanvas();
@@ -2857,6 +2881,7 @@
 
   async function init() {
     cacheElements();
+    els.sceneBrowser.addEventListener("toggle", () => { if (els.sceneBrowser.open) renderThumbnails(); });
     for (const landmark of window.GSRPitchReference.buildPitchReference()
       .landmarks) {
       const option = document.createElement("option");

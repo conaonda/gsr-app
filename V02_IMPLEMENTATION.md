@@ -1,12 +1,13 @@
 # v0.2 first development bundle
 
-Scope: reference discussion PR-01 through PR-04: invariant fixes, real non-persisting preview, usable source editor, overlay/async integration. PR-05 media caching/continuous decode and v0.3 line/arc fitting remain follow-ups. Existing P0 APIs and stored observations remain readable.
+Original scope: reference discussion PR-01 through PR-04: invariant fixes, real non-persisting preview, usable source editor, overlay/async integration. Existing P0 APIs and stored observations remain readable.
 
 Follow-up status (2026-09-09): source-checked frame caching, exact-PTS seeking,
-index reuse and a named pitch-reference input are now implemented. The original
+index reuse, bounded continuous-range decoding for propagation, navigation thumbnails
+and a named pitch-reference input are now implemented. The original
 first-bundle scope and ownership below are historical. See
 [the improvement plan](docs/improvement-plan.md) for evidence and remaining
-continuous-decoder/line-arc work.
+prefetch/line-arc work.
 
 ## Shared interface
 

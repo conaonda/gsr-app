@@ -519,6 +519,7 @@ def propagate_ground_points(
     target_frame_index: int,
     points: Sequence[Mapping[str, Any]],
     image_size: tuple[int, int],
+    decoded_frames: Iterable[np.ndarray] | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Conservatively propagate fit points between nearby video frames.
 
@@ -568,7 +569,15 @@ def propagate_ground_points(
     current = np.asarray(coordinates, dtype=np.float32)
     direction = 1 if target_frame_index > source_frame_index else -1
     frame_indices = range(source_frame_index, target_frame_index, direction)
-    previous = decode_frame(path, source_frame_index)
+    images = iter(decoded_frames) if decoded_frames is not None else (
+        decode_frame(path, i) for i in range(source_frame_index, target_frame_index + direction, direction)
+    )
+    def next_image() -> np.ndarray:
+        try:
+            return next(images)
+        except StopIteration as exc:
+            raise MediaError("Frame provider ended before the target frame") from exc
+    previous = next_image()
     if previous.shape[1] != width or previous.shape[0] != height:
         # The dimensions are provided from the same probe, but this catches a
         # changed source or unexpected FFmpeg autorotation before storing data.
@@ -577,7 +586,7 @@ def propagate_ground_points(
     max_dimension = float(max(width, height))
     for frame_index in frame_indices:
         next_index = frame_index + direction
-        following = decode_frame(path, next_index)
+        following = next_image()
         if following.shape[1] != width or following.shape[0] != height:
             raise MediaError("Decoded target frame dimensions do not match the indexed video")
         # Padding is deliberately modest.  The polygon remains the ground ROI

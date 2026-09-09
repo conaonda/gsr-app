@@ -10,13 +10,13 @@ import pytest
 from fastapi.testclient import TestClient
 
 import gsr.frame_cache as cache_module
-from gsr.frame_cache import FrameCache, extract_indexed_frame
+from gsr.frame_cache import FrameCache, extract_indexed_frame, iter_indexed_frames
 from gsr.media import FrameInfo, probe_video, extract_frame
 from gsr.server import create_app
 from make_demo_video import make_video
 
 
-@pytest.mark.parametrize('kind', ['bframes', 'vfr', 'offset', 'rotated'])
+@pytest.mark.parametrize('kind', ['bframes', 'vfr', 'offset', 'rotated', 'tenbit'])
 def test_seek_matches_sequential_pixels_with_exact_pts(tmp_path, monkeypatch, kind):
     path = tmp_path / 'frames.mp4'
     filters = {'vfr': "select='eq(mod(n,3),0)+eq(n,1)'", 'offset': 'setpts=PTS+2/TB'}
@@ -24,6 +24,8 @@ def test_seek_matches_sequential_pixels_with_exact_pts(tmp_path, monkeypatch, ki
             'testsrc2=size=160x120:rate=12:duration=4']
     if kind in filters:
         args += ['-vf', filters[kind], '-fps_mode', 'vfr']
+    if kind == 'tenbit':
+        args += ['-pix_fmt', 'yuv420p10le', '-colorspace', 'bt2020nc']
     args += ['-c:v', 'libx264', '-g', '12', '-bf', '3', str(path)]
     subprocess.run(args, check=True)
     if kind == 'rotated':
@@ -40,6 +42,13 @@ def test_seek_matches_sequential_pixels_with_exact_pts(tmp_path, monkeypatch, ki
         expected = cv2.imdecode(np.frombuffer(extract_frame(path, index), np.uint8), cv2.IMREAD_COLOR)
         actual = cv2.imdecode(np.frombuffer(extract_indexed_frame(info, index), np.uint8), cv2.IMREAD_COLOR)
         assert np.array_equal(actual, expected), (kind, index)
+    # Force two-frame windows and test both traversal directions.
+    for first, last in [(1, 4), (len(info.frames)-1, len(info.frames)-4)]:
+        direction = 1 if last >= first else -1
+        actual_frames = list(iter_indexed_frames(info, first, last, max_bytes=info.width*info.height*3*2))
+        for index, actual in zip(range(first,last+direction,direction), actual_frames, strict=True):
+            expected = cv2.imdecode(np.frombuffer(extract_frame(path,index),np.uint8),cv2.IMREAD_COLOR)
+            assert np.array_equal(actual, expected), (kind, index, 'range')
 
 
 def test_ambiguous_pts_and_failed_seek_use_sequential(tmp_path, monkeypatch):
@@ -109,8 +118,14 @@ def test_reimport_reuses_index_and_cache_never_hides_source_change(tmp_path, mon
     assert first.headers['X-GSR-Frame-Cache'] == 'miss'
     assert second.headers['X-GSR-Frame-Cache'] == 'hit'
     assert first.content == second.content
+    thumbnail = client.get(prefix+'/thumbnail/1')
+    assert thumbnail.status_code == 200 and thumbnail.headers['content-type'] == 'image/jpeg'
+    thumb = cv2.imdecode(np.frombuffer(thumbnail.content,np.uint8),cv2.IMREAD_COLOR)
+    assert thumb.shape[:2] == (180,320)
+    assert client.get(prefix+'/frame/1').content == first.content
     assert client.get(prefix+'/source').json()['source_revision'] == record['source_revision']
     with path.open('ab') as output:
         output.write(b'changed')
     assert client.get(prefix+'/frame/1').status_code == 409
     assert client.get(prefix+'/source').status_code == 409
+    assert client.get(prefix+'/thumbnail/1').status_code == 409

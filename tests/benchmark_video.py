@@ -4,6 +4,7 @@ python tests/benchmark_video.py ABSOLUTE_VIDEO_PATH --check-pixels --screenshots
 Artifacts remain in ignored data/video-benchmark/<timestamp>/.
 """
 import argparse
+import gc
 from datetime import datetime
 import json
 import os
@@ -102,6 +103,18 @@ def main():
                             verified.append(index)
                             print('Exact pixels:', index, flush=True)
                         report['pixel_equal_frames'] = verified
+                        from gsr.server import SessionStore
+                        from gsr.frame_cache import iter_indexed_frames
+                        info = SessionStore(env['GSR_DB_PATH']).get_video(record['id']).info
+                        start, end = min(150,len(frames)-1), min(153,len(frames)-1)
+                        started = time.perf_counter()
+                        segment = list(iter_indexed_frames(info,start,end))
+                        report['continuous_range_seconds'] = round(time.perf_counter()-started,3)
+                        for index, actual in zip(range(start,end+1),segment,strict=True):
+                            expected = cv2.imdecode(np.frombuffer(extract_frame(video,index),np.uint8),cv2.IMREAD_COLOR)
+                            assert np.array_equal(actual,expected), f'Range pixel mismatch at {index}'
+                        report['continuous_range'] = [start,end]
+                        print('Continuous range:', report['continuous_range_seconds'], flush=True)
                     assert not report['browser_errors'], report['browser_errors']
                     assert identity == (video.stat().st_size, video.stat().st_mtime_ns)
                     report['status'] = 'passed'
@@ -113,6 +126,7 @@ def main():
                     process.kill()
                     process.wait()
                 (output/'report.json').write_text(json.dumps(report,ensure_ascii=False,indent=2),encoding='utf-8')
+                gc.collect()  # sqlite context managers commit but close on collection.
     print('Report:', output/'report.json', flush=True)
 
 

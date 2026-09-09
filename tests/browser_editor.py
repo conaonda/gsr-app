@@ -203,6 +203,15 @@ def exercise(page, video, client):
     expect(page.locator('#estimateButton')).to_be_enabled()
     page.locator('#toolSelect').click()
     page.locator('#independentValidationToggle').uncheck()
+    page.locator('#sceneBrowser summary').click()
+    first_thumbnail = page.locator('#thumbnailStrip img').first
+    expect(first_thumbnail).to_be_visible()
+    page.wait_for_function('document.querySelector("#thumbnailStrip img").naturalWidth > 0')
+    page.locator('#thumbnailStrip button').nth(1).click()
+    ready(page)
+    expect(page.locator('#sourceCanvas')).to_have_attribute('data-frame-index', '7')
+    page.locator('#historyList .history-item').first.click()
+    ready(page)
     page.screenshot(path=str(ARTIFACTS/'editor-desktop.png'), full_page=True)
 
     # Overlay toggles must actually change pixels on the original-frame canvas.

@@ -15,6 +15,9 @@ import threading
 from typing import Any, Mapping
 from urllib.parse import urlsplit
 
+import cv2
+import numpy as np
+
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse, Response
@@ -22,7 +25,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictFloat, StrictInt
 from typing_extensions import Literal
 
-from .frame_cache import FrameCache, extract_indexed_frame
+from .frame_cache import FrameCache, extract_indexed_frame, iter_indexed_frames
 
 from .media import (
     FrameInfo,
@@ -728,26 +731,53 @@ def create_app(db_path: str | Path | None = None) -> FastAPI:
         return JSONResponse({"source_revision": _source_revision(video)},
                             headers={"Cache-Control": "no-store"})
 
+    def cached_frame(video: StoredVideo, frame_index: int) -> tuple[bytes, bool]:
+        def load() -> bytes:
+            data = extract_indexed_frame(video.info, frame_index)
+            store.assert_current(video)
+            return data
+        return app.state.frame_cache.get(
+            (str(video.info.path), _source_revision(video), frame_index), load
+        )
+
     @app.get("/api/videos/{video_id}/frame/{frame_index}")
     def get_frame(video_id: int, frame_index: int) -> Response:
         video = _video_or_404(store, video_id)
         store.assert_current(video)
         store.get_frame(video, frame_index)
         try:
-            def load() -> bytes:
-                data = extract_indexed_frame(video.info, frame_index)
-                store.assert_current(video)
-                return data
-
-            encoded, cached = app.state.frame_cache.get(
-                (str(video.info.path), _source_revision(video), frame_index), load
-            )
+            encoded, cached = cached_frame(video, frame_index)
         except MediaError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
         return Response(content=encoded, media_type="image/png", headers={
             "Cache-Control": "no-store",
             "X-GSR-Frame-Cache": "hit" if cached else "miss",
         })
+
+    @app.get("/api/videos/{video_id}/thumbnail/{frame_index}")
+    def get_thumbnail(video_id: int, frame_index: int) -> Response:
+        video = _video_or_404(store, video_id)
+        store.assert_current(video)
+        store.get_frame(video, frame_index)
+        def load() -> bytes:
+            png, _ = cached_frame(video, frame_index)
+            image = cv2.imdecode(np.frombuffer(png, np.uint8), cv2.IMREAD_COLOR)
+            if image is None:
+                raise MediaError('Could not decode thumbnail source')
+            height, width = image.shape[:2]
+            scale = min(1, 320 / width, 180 / height)
+            resized = cv2.resize(image, (max(1, round(width*scale)), max(1, round(height*scale))), interpolation=cv2.INTER_AREA)
+            ok, encoded = cv2.imencode('.jpg', resized, [cv2.IMWRITE_JPEG_QUALITY, 75])
+            if not ok:
+                raise MediaError('Could not encode thumbnail')
+            store.assert_current(video)
+            return encoded.tobytes()
+        try:
+            encoded, _ = app.state.frame_cache.get(
+                ('thumbnail', str(video.info.path), _source_revision(video), frame_index), load)
+        except MediaError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        return Response(content=encoded, media_type='image/jpeg', headers={'Cache-Control':'no-store'})
 
     @app.get("/api/videos/{video_id}/registrations")
     def list_registrations(video_id: int) -> list[dict[str, Any]]:
@@ -816,9 +846,11 @@ def create_app(db_path: str | Path | None = None) -> FastAPI:
                 target_frame.index,
                 source["points"],
                 (video.info.width, video.info.height),
+                decoded_frames=iter_indexed_frames(video.info, source_frame.index, target_frame.index),
             )
         except MediaError as exc:
             raise HTTPException(status_code=422, detail=f"Could not propagate registration: {exc}") from exc
+        store.assert_current(video)
         field = dict(source["field"])
         analysis = _run_geometry(points, field, (video.info.width, video.info.height))
         # Propagation has no independent target validation.  Force this gate
