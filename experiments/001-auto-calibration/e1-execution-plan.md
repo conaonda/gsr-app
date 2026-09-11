@@ -212,19 +212,19 @@ PnLCalib E1 결과 schema가 안정된 뒤 TVCalib를 같은 100장에 적용한
 
 PnLCalib E1은 다음이 모두 충족되어야 `completed`로 기록한다.
 
-- [ ] 고정된 100장 모두 실행 시도됨
-- [ ] 각 프레임이 `candidate | no_solution | error | not_run` 중 하나로 남음
-- [ ] 수동 추론 프롬프트 0회가 확인됨
-- [ ] upstream commit, checkpoint SHA256, config hash가 저장됨
-- [ ] manifest의 sample ID/PTS/source hash가 sidecar와 연결됨
-- [ ] raw 결과와 원본 좌표 overlay가 재현 가능하게 저장됨
-- [ ] 처리시간·VRAM/RAM이 측정 범위와 함께 기록됨
-- [ ] refinement on/off가 동일 detector 계열 ablation으로 기록됨
+- [x] 고정된 100장 모두 실행 시도됨
+- [x] 각 프레임이 `candidate | no_solution | error | not_run` 중 하나로 남음
+- [x] 수동 추론 프롬프트 0회가 확인됨
+- [x] upstream commit, checkpoint SHA256, config hash가 저장됨
+- [x] manifest의 sample ID/PTS/source hash가 sidecar와 연결됨
+- [x] raw 결과와 원본 좌표 overlay가 재현 가능하게 저장됨
+- [x] 처리시간·VRAM/RAM이 측정 범위와 함께 기록됨
+- [x] refinement on/off가 동일 detector 계열 ablation으로 기록됨
 - [ ] 독립 평가 subset 15~20장이 모델 출력과 분리되어 고정됨
-- [ ] output coverage와 validated coverage가 구분되어 보고됨
+- [x] output coverage와 validated coverage가 구분되어 보고됨
 - [ ] catastrophic failure와 false acceptance가 별도 집계됨
-- [ ] 실제 필드 모델 미확인 시 `metric_eligible=false` 유지
-- [ ] 결과 요약 문서가 저장소에 추가되고 원본 영상/프레임/가중치는 Git에 포함되지 않음
+- [x] 실제 필드 모델 미확인 시 `metric_eligible=false` 유지
+- [x] 결과 요약 문서가 저장소에 추가되고 원본 영상/프레임/가중치는 Git에 포함되지 않음
 
 TVCalib 비교는 별도 완료 조건으로 기록하며, PnLCalib E1 완료를 TVCalib 성공 여부에 종속시키지 않는다.
 

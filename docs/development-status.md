@@ -19,7 +19,7 @@
 | PR-05 영상 접근 | 구현 | exact-PTS seek와 순차 fallback, 제한 캐시, 짧은 구간 디코딩, 썸네일 |
 | 이름 있는 기준점 7개 | 선택 UI 구현 | feature ID를 보존하는 정식 관측 계약은 아직 없음 |
 | 기능·영상 접근 평가 | 기록 있음 | 합성 CI 및 실제 영상 대기시간/픽셀 비교; 경기장 정확도 평가와 다름 |
-| 자동 정합 엔진 비교 | 입력 준비·PnLCalib 공개 예제 E0 완료 | [실행 결과](../experiments/001-auto-calibration/e0-results.md); 실제 영상 E1/E2·독립 정확도 비교는 미실행 |
+| 자동 정합 엔진 비교 | 입력 준비·PnLCalib 공개 예제 E0·E1-A 실행 완료 | [E1 실행 결과](../experiments/001-auto-calibration/e1-pnlcalib-results.md); 독립 정확도·TVCalib·E2는 대기 |
 | 자동 결과의 앱 채택 | 미구현 | 현재 수동 validation 규칙을 우회하지 않는 별도 품질 정책 필요 |
 | P1 선수 추적·장면 검색 | 미구현 | 경기장 정합과 독립적으로 진행 가능 |
 
@@ -53,7 +53,8 @@ PnLCalib, TVCalib, Broadcast2Pitch, Sportlight에는 자동 경기장 인지/정
 
 ### 1. E0/E1 — 기존 자동 엔진을 실행해서 비교
 
-첫 실행 순서는 PnLCalib와 TVCalib다. 공개 예제로 환경/좌표를 확인한 후 같은 native 샘플을 처리한다.
+첫 실행 순서는 PnLCalib와 TVCalib다. PnLCalib는 공개 예제와 같은 native 100장 실행까지 완료했고,
+이제 동일 입력의 TVCalib predicted-segmentation 경로와 독립 평가를 진행한다.
 Broadcast2Pitch SFR와 Sportlight는 가중치/의존성/VRAM 준비 상태와 보완 가치를 확인해 추가한다.
 각 모델의 코드 SHA·가중치 SHA256·전처리·필드 모델·오류·시간·메모리를 기록한다.
 표본에 관측을 수동으로 넣거나 잘 나온 프레임만 성공률 분모에 남기는 것을 금지한다.

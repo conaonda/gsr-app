@@ -1,6 +1,31 @@
 # Experiment 001 — 실행 현황과 다음 작업 인계
 
-## 2026-09-11 업데이트
+## 2026-09-11 E1 실행 업데이트 — 독립 평가 대기
+
+E0에서 이어진 고정 manifest를 사용해 PnLCalib E1-A smoke와 full zero-shot 실행을 완료했다.
+`pnl_refine=false/true`는 동일 detector 계열의 ablation으로 각각 별도 run에 남겼다.
+
+| 현재 확인된 항목 | 결과 | 해석 |
+| --- | --- | --- |
+| smoke OFF/ON | 각각 3/3 `no_solution`, error 0, 수동 프롬프트 0 | 처음·중간·마지막 sample 실행 확인 |
+| full OFF | 100/100 `no_solution`, error 0, not_run 0 | candidate 반환 없음; 정확도 0점이 아님 |
+| full ON | 100/100 `no_solution`, error 0, not_run 0 | OFF와 같은 detector raw 출력 100/100 |
+| provenance/output | 모든 sidecar·PTS·PNG 해시·raw/overlay 검증 통과 | 입력·결과 연결성 확인 |
+| 독립 정확도·실제 필드 적합성 | 미측정·미확인 | `not_measured`, `unverified`, `metric_eligible=false` 유지 |
+
+상세 run ID, 설정·가중치 해시, 자원 수치와 재현 명령은 [E1 실행 결과](e1-pnlcalib-results.md)에
+기록했다. `no_solution`은 고정 PnLCalib solver의 실행 결과이며 인지 실패·모델 불일치·정확도
+실패 중 하나로 아직 분해하지 않았다. 기존 E0 산출물은 보존했고, E1 결과를 현재 앱의
+`usable` 상태로 자동 저장하지 않았다.
+
+### 현재 다음 작업
+
+1. 모델 결과를 보기 전에 영상 조건으로 15–20장 독립 평가 subset을 고정한다.
+2. raw detector 관측과 표준 105×68 field-model 불일치 가능성을 분리해 검수한다.
+3. 같은 native 100장·동일 독립 subset으로 TVCalib predicted-segmentation 경로를 실행한다.
+4. E2 시간축 평가와 앱 자동 채택은 별도 작업으로 남긴다.
+
+## 2026-09-11 E0 업데이트 (E1 실행 전 기록)
 
 PnLCalib 공개 예제 E0를 완료했다. 고정 SV 가중치를 GPU에서 로드하고, 수동 프롬프트
 없이 후보·raw heatmap·원본 좌표 sidecar를 생성했다. 공식 오버레이 픽셀이 일치하고
@@ -15,7 +40,7 @@ PnLCalib 공개 예제 E0를 완료했다. 고정 SV 가중치를 GPU에서 로�
 | 로컬 회귀 검사 | Python 41개·JavaScript 12개·브라우저 통과 | 임시 DB 정리까지 종료 코드 0 |
 | 독립 정확도·실제 필드 적합성 | 미측정·미확인 | `metric_eligible=false` 유지 |
 
-### 다음 작업의 순서와 완료 조건
+### 당시 E0 이후 다음 작업의 순서와 완료 조건
 
 1. 기존 PTS manifest의 sample ID·frame index·PTS·time base·원본 해시를 단일 이미지
    어댑터 출력과 연결한다. 정지 이미지용 null 시각을 실제 영상의 시각으로 추측해 채우지 않는다.
@@ -26,9 +51,8 @@ PnLCalib 공개 예제 E0를 완료했다. 고정 SV 가중치를 GPU에서 로�
 4. 독립 라벨이 준비되기 전에는 정확도를 `not_measured`로 둔다. TVCalib 비교와 E2 시간축
    평가는 각각 실제 실행 기록이 생긴 뒤 완료로 바꾼다.
 
-다음 작업은 E1용 manifest 결합 및 100장 실행이다. TVCalib/E2/독립 라벨/앱 채택은
-미실행이다. 아래 내용은 2026-09-10의 준비 단계 인계 기록으로 보존하며, 그 당시
-`not_run`/CPU/DNS 제약을 현재 E0 상태로 해석하지 않는다.
+위 E1 실행 업데이트가 현재 상태의 기준이다. 아래 내용은 E1 실행 전의 준비·인계 기록을
+보존한 것으로, 그 당시 `not_run`/CPU/DNS 제약을 현재 E1 실행 결과로 해석하지 않는다.
 
 ## 이전 준비 단계 기록
 
@@ -56,12 +80,12 @@ PnLCalib 공개 예제 E0를 완료했다. 고정 SV 가중치를 GPU에서 로�
 | 실제 영상 PTS 인덱스와 비교용 PNG 준비 | 완료 기록 있음 | 아래 입력 요약 및 `preparation-results.md` |
 | 준비 도구의 격리 테스트 | 6개 통과 기록 있음 | 모델 정확도 검사가 아닌 입력 준비 검사 |
 | 준비 커밋의 PR CI | 성공 확인 | `48c78a6`, 아래에 연결한 run 34368428939 |
-| 가중치 다운로드·해시 확정 | 미완료 | 후보별 `checkpoint_sha256`은 null |
-| 공개 예제 모델 로드·추론(E0) | `not_run` | 설치와 좌표 어댑터의 실행 검증이 남음 |
-| 동일 휴대폰 프레임 100장 추론(E1) | `not_run` | 정합 성공률이나 엔진별 순위 없음 |
+| 가중치 다운로드·해시 확정 | 완료 기록 있음 | `candidates.json` 및 E0/E1 sidecar의 SHA256 |
+| 공개 예제 모델 로드·추론(E0) | 완료 | [E0 결과](e0-results.md) |
+| 동일 휴대폰 프레임 100장 추론(E1-A) | 실행 완료·독립 평가 대기 | [E1 결과](e1-pnlcalib-results.md); full OFF/ON 모두 100 `no_solution` |
 | 시간축 창 추론(E2) | `not_run` | 구간 정의만 완료 |
 | 독립 평가 라벨 | `not_created` | 재투영 정확도·오채택률은 `not_measured` |
-| RTX 3070 처리시간·VRAM 측정 | `not_measured` | 기존 CPU 준비 시간을 GPU 성능으로 환산하지 않음 |
+| RTX 3070 처리시간·VRAM 측정 | E0/E1 측정 완료 | run sidecar에 범위·측정 정의를 기록 |
 | 자동 결과의 앱 채택·P1 검색 | 미구현 | 기존 런타임·SQLite·좌표 사용 자격 규칙은 그대로 유지 |
 
 [준비 커밋의 GSR checks 실행](https://github.com/conaonda/gsr-app/actions/runs/34368428939)은 처음 보고할 때 진행 중이었으나, 이 문서 작성 시 `completed / success`를 확인했다. 이 결과는 해당 준비 커밋의 기능 검사 근거이며 자동 모델 추론·경기장 정확도나 이후 커밋의 CI 성공을 뜻하지 않는다.
@@ -86,7 +110,7 @@ PnLCalib 공개 예제 E0를 완료했다. 고정 SV 가중치를 GPU에서 로�
 
 | 순서 | 후보 | 다음 실행에서 먼저 확인할 것 |
 | --- | --- | --- |
-| A1 | PnLCalib | 공개 가중치 다운로드·SHA256, 공개 이미지 추론, 원본 좌표의 raw-output 어댑터 |
+| A1 | PnLCalib | E0 공개 예제와 E1 100장 실행 완료; 독립 평가 대기 |
 | A2 | TVCalib | pretrained segmentation을 포함한 전체 자동 경로; 정답 segment 입력 실험과 분리 |
 | B | Broadcast2Pitch SFR | SFR 가중치와 `kpts.py`만 분리 실행; 추적·ReID·LLM은 첫 정합 실험에서 제외 |
 | C | Sportlight 2023 | 배포 checkpoint 경로, Linux/Docker 환경과 8GB 추론 가능성 확인 |
@@ -103,9 +127,9 @@ Sportlight 공식 README의 24GB GPU 안내만으로 RTX 3070에서의 추론을
 
 **결과 종류를 분리한다.** 환경 실패·OOM·미실행·해 없음·후보 생성·독립 검증 통과를 각각 기록한다. 미실행을 모델 정확도 0점으로 만들지 않고, 실패 프레임을 성공률의 분모에서 몰래 제외하지 않는다. 한 영상에서 얻은 결과는 다른 경기장이나 휴대폰에 대한 일반화 보장이 아니다.
 
-## 6. 다음 작업: PnLCalib 공개 예제와 원본 좌표 어댑터
+## 6. 후속 작업: E1 독립 평가와 TVCalib 비교
 
-### E0 — 재현 가능한 첫 추론
+### E0 — 재현 가능한 첫 추론 (완료 기록)
 
 1. `candidates.json`의 PnLCalib upstream SHA로 별도 작업 복사본을 만들고, 앱과 분리된 환경을 사용한다. 코드·가중치 사용 조건 및 파일 해시를 기록한다.
 2. 공개 예제 또는 사용 조건을 확인한 방송 축구 이미지에서 실제 가중치를 로드해 추론한다. 이 단계의 실패를 휴대폰 도메인 실패로 분류하지 않는다.
@@ -115,9 +139,14 @@ Sportlight 공식 README의 24GB GPU 안내만으로 RTX 3070에서의 추론을
 
 **E0 완료 조건:** 실제 가중치 로드 및 공개 예제 추론 로그, 원본 좌표 오버레이와 raw-output sidecar, 좌표 변환 검증 기록, 수동 프롬프트 0회, 환경·가중치·설정 식별 정보가 모두 남아 있어야 한다. 파일 다운로드나 그럴듯한 오버레이만으로 완료 처리하지 않는다. E0 통과는 공개 예제 실행의 확인이지 실제 경기 정확도 검증이 아니다.
 
-### E1 — 고정된 100장 비교
+### E1 — 고정된 100장 비교 (실행 완료; 평가 대기)
 
-E0를 통과한 PnLCalib를 준비된 동일 100장에 적용한다. refinement on/off 결과를 별도 run으로 기록하고, 다음으로 TVCalib의 predicted-segmentation 경로를 같은 입력에 적용한다. 독립 라벨이 없으면 실행률·후보 반환 현황만 보고하고 정합 정확도는 `not_measured`로 둔다. 평가 프로토콜·허용 오차·분모는 [실험 계획](README.md#8-평가와-정답)을 따른다.
+E0를 통과한 PnLCalib를 동일 100장에 적용했고 refinement on/off 결과를 별도 run으로 기록했다.
+두 full run은 모두 100 `no_solution`, error 0, not_run 0이었다. raw detector 출력·PTS
+provenance·자원 측정은 [E1 실행 결과](e1-pnlcalib-results.md)에 기록했다. 독립 라벨이 없으므로
+정합 정확도·validated coverage·false acceptance는 `not_measured`다. 다음으로 TVCalib의
+predicted-segmentation 경로를 같은 입력에 적용하며, 평가 프로토콜·허용 오차·분모는
+[실험 계획](README.md#8-평가와-정답)을 따른다.
 
 ### E2 및 후속 투자
 

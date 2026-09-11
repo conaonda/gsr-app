@@ -1,7 +1,7 @@
 # Experiment 001 — 수동 입력 없는 자동 경기장 정합 비교
 
-상태: **입력 준비 및 PnLCalib 공개 예제 E0 완료. 실제 영상 E1/E2와 독립 정확도 비교는 미실행.**
-2026-09-11 실행 근거는 [E0 결과](e0-results.md)에 기록한다.
+상태: **입력 준비·PnLCalib 공개 예제 E0·고정 100장 E1-A 실행 완료. 독립 정확도 비교와 E2는 대기.**
+2026-09-11 실행 근거는 [E0 결과](e0-results.md)와 [E1 결과](e1-pnlcalib-results.md)에 기록한다.
 기준 코드: `conaonda/gsr-app@fbecdf786e2690be94dba797f7d771d388b11841`.
 관련 현황: [개발 현황](../../docs/development-status.md).
 
@@ -91,8 +91,9 @@ resize/crop 없는 원본 표시 방향의 `native/000.png ...`다.
 
 ## 6. 추론 어댑터 명세 — PnLCalib 단일 이미지 경로 구현
 
-`run_pnlcalib.py`와 `coordinates.py`가 공개 이미지에서 검증됐다. 모델 출력·원본 좌표·
-오버레이·환경/해시를 sidecar로 저장한다. E1 manifest 결합, batch 실행, 다른 엔진은 후속이다.
+`run_pnlcalib.py`와 `coordinates.py`가 공개 이미지에서 검증됐고, `run_pnlcalib_e1.py`가
+동일한 adapter 계약으로 고정 100장 manifest의 smoke/full 및 refinement off/on을 실행한다.
+모델 출력·원본 좌표·오버레이·환경/해시를 sidecar로 저장한다. 다른 엔진 비교와 독립 평가가 후속이다.
 
 엔진별 별도 venv/conda와 worker를 사용한다. RTX 3070에서는 batch=1, 엔진 하나씩 시작한다.
 장치명·dtype·로드 시간·프레임 처리시간·VRAM·RAM을 구분하고, CPU smoke를 3070 성능으로 환산하지 않는다.
@@ -118,7 +119,7 @@ quality_state: unassessed | qc_pass | qc_fail
 manual_prompt_count, processing_seconds, peak_vram_bytes
 ```
 
-미실행은 별도의 `not_run`이며 성공/실패 비율에 포함하지 않는다. 이전 H/identity fallback을 새 관측 성공으로 세지 않는다.
+미실행은 별도의 `not_run`이며 성공/실패 비율에 포함하지 않는다. 이전 H/identity fallback을 새 관측 성공으로 세지 않는다. 실제 E1 실행 결과는 [e1-pnlcalib-results.md](e1-pnlcalib-results.md)에 기록한다.
 
 ## 7. 좌표·품질 안전 규칙
 
@@ -154,9 +155,9 @@ T가 native→model, H가 model→pitch일 때만 `H_native=H*T`다. 반대 방�
 
 ## 9. 다음 의사결정
 
-1. E0/A1: PnLCalib 공개 예제 smoke 및 native sidecar adapter.
-2. E1/A1: 같은 100장에 수동 프롬프트 0회; 동일 detector로 refinement on/off 비교.
-3. E0/E1/A2: TVCalib predicted-segmentation 경로를 동일 입력에 실행.
+1. E0/A1: 완료된 PnLCalib 공개 예제 및 native sidecar adapter를 유지한다.
+2. E1/A1: 같은 100장의 refinement on/off 실행은 완료했으며, 독립 평가 subset과 원인 분리를 진행한다.
+3. E0/E1/A2: TVCalib predicted-segmentation 경로를 동일 입력에 실행한다.
 4. B/C: 가중치/메모리 조건 및 보완 가치를 확인해 추가.
 5. 인지 실패면 domain adaptation, 모델불일치면 마킹/필드 모델 대응, 시간 단절이면 자동 temporal calibration을 투자한다.
 6. 비교 후 필요한 최소 관측 계약·앱 통합을 구현한다. 수동 mixed solver를 다시 선행 조건으로 두지 않는다.
