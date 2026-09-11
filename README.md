@@ -8,7 +8,7 @@ v0.2 첫 개발 묶음은 좌표 사용 자격 보완, 저장 없는 정합 미�
 
 현재 구현 상태와 자동 정합 비교 우선 로드맵, P1 선수 추적의 진행 방향은 [docs/development-status.md](docs/development-status.md)에 정리되어 있습니다. 다음 작업은 수동 기준점·선 입력 확장이 아니라 공개 자동 정합 엔진의 실제 영상 비교입니다.
 
-**Experiment 001은 실험 설계와 입력 준비까지 완료했으며, 자동 모델 추론·정확도 비교는 아직 실행하지 않았습니다.** 현재 앱이 자동 정합을 제공한다는 뜻은 아닙니다. [실험 계획](experiments/001-auto-calibration/README.md)과 [실행 현황·다음 작업 인계](experiments/001-auto-calibration/status-and-handoff.md)에서 완료 범위, 후보별 준비 상태, PnLCalib 첫 실행의 완료 조건을 확인할 수 있습니다.
+**Experiment 001은 입력 준비와 PnLCalib 공개 예제 E0 추론·좌표 검증을 완료했습니다. 실제 경기 영상 100장 비교와 독립 정확도 평가는 아직 실행하지 않았습니다.** 현재 앱에 자동 정합을 통합한 것은 아닙니다. [E0 결과](experiments/001-auto-calibration/e0-results.md), [실험 계획](experiments/001-auto-calibration/README.md), [실행 현황·다음 작업 인계](experiments/001-auto-calibration/status-and-handoff.md)를 참고하세요.
 
 관련 문서:
 

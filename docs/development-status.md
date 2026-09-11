@@ -4,7 +4,7 @@
 로드맵 결정: **자동 정합 비교를 먼저 수행하며, 수동 점·선 입력 확장을 제품의 선행 조건으로 두지 않는다.**
 
 다음 작업의 기준 문서는 [Experiment 001: 수동 입력 없는 자동 정합 비교](../experiments/001-auto-calibration/README.md)다.
-완료 범위·미실행 항목·PnLCalib 첫 추론의 완료 조건은 [실행 현황과 다음 작업 인계](../experiments/001-auto-calibration/status-and-handoff.md)에 정리한다.
+완료 범위·미실행 항목·E1 실제 영상 평가의 완료 조건은 [실행 현황과 다음 작업 인계](../experiments/001-auto-calibration/status-and-handoff.md)에 정리한다.
 이 결정은 이전 문서의 `observation-v2 → 수동 점+선 → snap → 자동화` 우선순위를 대체한다.
 기존 구현과 저장 데이터를 삭제하거나 현재 `CONTRACT.md`의 좌표 사용 자격을 완화하는 결정은 아니다.
 
@@ -19,7 +19,7 @@
 | PR-05 영상 접근 | 구현 | exact-PTS seek와 순차 fallback, 제한 캐시, 짧은 구간 디코딩, 썸네일 |
 | 이름 있는 기준점 7개 | 선택 UI 구현 | feature ID를 보존하는 정식 관측 계약은 아직 없음 |
 | 기능·영상 접근 평가 | 기록 있음 | 합성 CI 및 실제 영상 대기시간/픽셀 비교; 경기장 정확도 평가와 다름 |
-| 자동 정합 엔진 비교 | 실험 설계·입력 준비 | Experiment 001; **모델 추론은 아직 실행하지 않음** |
+| 자동 정합 엔진 비교 | 입력 준비·PnLCalib 공개 예제 E0 완료 | [실행 결과](../experiments/001-auto-calibration/e0-results.md); 실제 영상 E1/E2·독립 정확도 비교는 미실행 |
 | 자동 결과의 앱 채택 | 미구현 | 현재 수동 validation 규칙을 우회하지 않는 별도 품질 정책 필요 |
 | P1 선수 추적·장면 검색 | 미구현 | 경기장 정합과 독립적으로 진행 가능 |
 

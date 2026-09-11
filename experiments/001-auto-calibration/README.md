@@ -1,6 +1,7 @@
 # Experiment 001 — 수동 입력 없는 자동 경기장 정합 비교
 
-상태: **실험 설계 및 입력 준비. 모델 추론/정확도 비교는 아직 실행하지 않음.**
+상태: **입력 준비 및 PnLCalib 공개 예제 E0 완료. 실제 영상 E1/E2와 독립 정확도 비교는 미실행.**
+2026-09-11 실행 근거는 [E0 결과](e0-results.md)에 기록한다.
 기준 코드: `conaonda/gsr-app@fbecdf786e2690be94dba797f7d771d388b11841`.
 관련 현황: [개발 현황](../../docs/development-status.md).
 
@@ -88,7 +89,10 @@ resize/crop 없는 원본 표시 방향의 `native/000.png ...`다.
 영상·프레임·가중치·실험 출력은 Git 제외 `data/`에만 보관한다. 공개 CI는 합성 fixture만 사용한다.
 자녀 영상은 GitHub/외부 추론 API/공개 CI로 전송하지 않는다.
 
-## 6. 추론 어댑터 명세 — 아직 구현되지 않음
+## 6. 추론 어댑터 명세 — PnLCalib 단일 이미지 경로 구현
+
+`run_pnlcalib.py`와 `coordinates.py`가 공개 이미지에서 검증됐다. 모델 출력·원본 좌표·
+오버레이·환경/해시를 sidecar로 저장한다. E1 manifest 결합, batch 실행, 다른 엔진은 후속이다.
 
 엔진별 별도 venv/conda와 worker를 사용한다. RTX 3070에서는 batch=1, 엔진 하나씩 시작한다.
 장치명·dtype·로드 시간·프레임 처리시간·VRAM·RAM을 구분하고, CPU smoke를 3070 성능으로 환산하지 않는다.

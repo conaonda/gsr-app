@@ -19,6 +19,18 @@ import httpx
 ROOT = Path(__file__).resolve().parents[1]
 
 
+class IsolatedTestDirectory(tempfile.TemporaryDirectory):
+    def cleanup(self):
+        # Windows can release terminated child-process handles asynchronously.
+        for attempt in range(51):
+            try:
+                return super().cleanup()
+            except PermissionError as error:
+                if os.name != 'nt' or error.winerror != 32 or attempt == 50:
+                    raise
+                time.sleep(.1)
+
+
 def run(command, env=None):
     print('+ ' + ' '.join(str(item) for item in command), flush=True)
     subprocess.run(command, cwd=ROOT, env=env, check=True)
@@ -28,7 +40,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--skip-browser', action='store_true')
     args = parser.parse_args()
-    with tempfile.TemporaryDirectory(prefix='gsr-checks-') as temp:
+    with IsolatedTestDirectory(prefix='gsr-checks-') as temp:
         temp_dir = Path(temp)
         env = dict(os.environ)
         env['GSR_DB_PATH'] = str(temp_dir / 'sessions.sqlite3')
@@ -71,7 +83,13 @@ def main():
                 print(log.read()[-12000:], file=sys.stderr)
                 raise
             finally:
-                process.terminate()
+                if os.name == 'nt' and process.poll() is None:
+                    # Windows venv launchers may spawn the real Python process.
+                    # Stop this isolated server's tree before deleting its DB.
+                    subprocess.run(['taskkill', '/PID', str(process.pid), '/T', '/F'],
+                                   capture_output=True, check=True)
+                elif process.poll() is None:
+                    process.terminate()
                 try:
                     process.wait(timeout=10)
                 except subprocess.TimeoutExpired:
