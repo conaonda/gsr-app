@@ -1,212 +1,93 @@
 # 개발 현황과 다음 단계
 
-기준: 2026-09-09 PR-05 및 기준점 입력 후속 구현. 최초 현황 기준은 `cc6caf6`이며, 아래 상태는 후속 변경을 반영한다.
+코드 기준: `master@fbecdf786e2690be94dba797f7d771d388b11841`.
+로드맵 결정: **자동 정합 비교를 먼저 수행하며, 수동 점·선 입력 확장을 제품의 선행 조건으로 두지 않는다.**
 
-이 문서는 P0 구현 이후 논의한 개발 계획이 현재 저장소에 어느 정도 반영되었는지 정리하고, 다음 개발 순서를 고정하기 위한 상태 문서다. 세부 API 계약은 `CONTRACT.md`, v0.2 구현 범위는 `V02_IMPLEMENTATION.md`, 실제 영상 평가 결과는 `docs/v02-evaluation.md`를 우선한다.
+다음 작업의 기준 문서는 [Experiment 001: 수동 입력 없는 자동 정합 비교](../experiments/001-auto-calibration/README.md)다.
+완료 범위·미실행 항목·E1 실제 영상 평가의 완료 조건은 [실행 현황과 다음 작업 인계](../experiments/001-auto-calibration/status-and-handoff.md)에 정리한다.
+이 결정은 이전 문서의 `observation-v2 → 수동 점+선 → snap → 자동화` 우선순위를 대체한다.
+기존 구현과 저장 데이터를 삭제하거나 현재 `CONTRACT.md`의 좌표 사용 자격을 완화하는 결정은 아니다.
 
-## 현재 상태 요약
+## 현재 구현과 미구현을 구분
 
-현재 저장소는 초기 P0의 수동 점 대응 정합에서 발전하여, v0.2 첫 개발 묶음인 **정확성 보완 + 비저장 미리보기 + 원본 편집기 + 원본 오버레이**까지 구현되어 있다.
-
-| 계획 항목 | 상태 | 현재 구현 |
+| 항목 | 상태 | 근거/범위 |
 | --- | --- | --- |
-| PR-01 정확성 기준 고정 | 완료 | `review/unavailable -> image` 좌표 자격 강제, 과거 결과 read-time 보정, RANSAC lazy/bounded hypothesis |
-| PR-02 비저장 정합 API | 완료 | `POST /api/videos/{id}/registrations/preview`, `draft_version`, 저장/미리보기 공통 계산 경로 |
-| PR-03 원본 정합 편집기 | 완료 | zoom/pan/fit/1:1, 점 선택·드래그·키보드 미세조정, undo/redo, 프레임별 초안 |
-| PR-04 원본 오버레이·비동기 통합 | 완료 | inverse homography 기반 원본 오버레이, support/line/residual 토글, stale preview 방어, 독립 검증 모드 |
-| PR-05 프레임 접근·연속 디코딩·캐시 | 구현 | 정확한 PTS 탐색·순차 fallback, 제한 캐시, 전파 구간 디코딩, 탐색용 썸네일. 상주 디코더·선행 로딩은 후속 |
-| PR-06 실제 영상 평가·CI | 대부분 완료 | `tests/run_checks.py`, GitHub Actions, 실제 경기 영상 1차 평가 문서화 |
-| v0.3 의미 기반 관측 | 계약 확장 예정 | 불변 좌표 기준점 7개의 선택 UI는 반영. feature ID 저장·point+line·arc·snap은 후속 |
-| P1 선수 추적·검색 | 미구현 | 영상 좌표 기반 player detection/tracking/search는 후속 |
+| P0 점 정합·독립 검증 | 구현 | `gsr/geometry.py`, `CONTRACT.md` |
+| PR-01 좌표 자격·계산 안전성 | 구현 | review/unavailable은 image-only; 과거 결과 read-time 정정; bounded RANSAC |
+| PR-02 비저장 preview | 구현 | 저장과 공통 계산, draft_version, DB 비저장 |
+| PR-03/04 원본 편집·오버레이 | 구현 | zoom/pan/undo/redo/draft, inverse-H, stale response 방어 |
+| PR-05 영상 접근 | 구현 | exact-PTS seek와 순차 fallback, 제한 캐시, 짧은 구간 디코딩, 썸네일 |
+| 이름 있는 기준점 7개 | 선택 UI 구현 | feature ID를 보존하는 정식 관측 계약은 아직 없음 |
+| 기능·영상 접근 평가 | 기록 있음 | 합성 CI 및 실제 영상 대기시간/픽셀 비교; 경기장 정확도 평가와 다름 |
+| 자동 정합 엔진 비교 | 입력 준비·PnLCalib 공개 예제 E0·E1-A 실행 완료 | [E1 실행 결과](../experiments/001-auto-calibration/e1-pnlcalib-results.md); 독립 정확도·TVCalib·E2는 대기 |
+| 자동 결과의 앱 채택 | 미구현 | 현재 수동 validation 규칙을 우회하지 않는 별도 품질 정책 필요 |
+| P1 선수 추적·장면 검색 | 미구현 | 경기장 정합과 독립적으로 진행 가능 |
 
-## 반영된 핵심 설계 결정
+기존 v0.2 구현 내용은 [V02_IMPLEMENTATION](../V02_IMPLEMENTATION.md),
+[기능 평가](v02-evaluation.md), [영상 접근 개선/측정](improvement-plan.md)을 참고한다.
+`fbecdf7`의 GitHub Actions [run 34336336016](https://github.com/conaonda/gsr-app/actions/runs/34336336016)은
+이 코드 기준의 기능 검사 근거다. 이후 experiment 변경이나 자동 모델 정확도까지 그 성공으로 인증하지 않는다.
 
-### 1. 좌표 사용 자격과 정합 행렬을 분리
+Experiment 001 준비 커밋 `48c78a6`의 PR 검사 [run 34368428939](https://github.com/conaonda/gsr-app/actions/runs/34368428939)도 `completed / success`를 확인했다. 이는 준비 도구와 기존 기능의 검사이며 자동 정합 추론·정확도 검증 결과가 아니다. 입력 준비 실행 및 테스트 기록은 [preparation-results.md](../experiments/001-auto-calibration/preparation-results.md), 실행 여부와 다음 작업은 [인계 문서](../experiments/001-auto-calibration/status-and-handoff.md)를 참고한다.
 
-정합 행렬이 존재하더라도 `status != usable`이면 공간 분석용 좌표 자격을 부여하지 않는다. `review`와 `unavailable`은 `coordinate_level: "image"`로 제한한다.
+## 왜 순서를 바꾸는가
 
-과거 SQLite 결과 중 이전 정책으로 더 높은 좌표 자격이 기록된 경우, 원본 분석 JSON은 덮어쓰지 않고 조회 시 `eligibility_correction`을 붙여 정책을 적용한다.
+목표는 수동 캘리브레이션 편집기가 아니라 **경기 내용을 이해하고 선수·상황·사건에서 원본 장면을 역조회하는 것**이다.
+PnLCalib, TVCalib, Broadcast2Pitch, Sportlight에는 자동 경기장 인지/정합 구현이 있다.
+이들을 실제 입력에 시험하기 전에 사람에게 점/선 지정 작업을 반복시키는 기능에 더 투자하지 않는다.
+실행 경로와 가중치·환경 제약은 [고정 후보 목록](../experiments/001-auto-calibration/candidates.json)에 명시한다.
+공개 pretrained 모델이 있다고 우리 촬영·마킹에 zero-shot으로 충분하다고 가정하지도 않는다.
 
-### 2. 미리보기와 저장을 분리
+## 유지하는 자산과 안전 규칙
 
-정합 수정 과정에서 실제 geometry를 반복 계산할 수 있지만, 미리보기는 등록 이력을 생성하지 않는다.
+원본 PTS 인덱스·frame provider·캐시, 오버레이, 프레임별 초안, 이력과 JSON export는 유지한다.
+기존 수동 모드는 평가 라벨·오류 조사·선택적 보정 수단으로 둔다. 모든 사용 프레임에 수동 anchor를 요구하지 않는다.
 
-- preview와 save는 동일한 입력 검증과 geometry 계산 경로를 사용한다.
-- preview는 `persisted:false`이며 registration ID를 만들지 않는다.
-- save 시 클라이언트가 보낸 행렬이나 상태를 신뢰하지 않고 서버에서 다시 계산한다.
+화면 확대와 native 이미지 좌표는 분리한다. H는 image→normalized pitch 방향이며 metric 자격과 행렬 단위는 별개다.
+과거 SQLite는 덮어쓰지 않는다. 모델 예측을 validation으로 복사해서 usable을 얻지 않는다.
+자동 후보는 우선 별도 sidecar로 기록한다. 후보 생성·자동 QC·사람 검증·미터 자격을 각각 구분한다.
+실제 경기장 모델/치수가 확인되지 않으면 모델의 표준 105×68 값을 실측으로 간주하지 않는다.
+원본과 식별 가능한 경기 프레임은 공개 저장소/CI/외부 추론 서비스에 전송하지 않는다.
 
-### 3. 화면 좌표와 원본 좌표를 분리
+## 새 우선순위
 
-zoom/pan은 저장되는 관측 좌표를 변경하지 않는다.
+### 1. E0/E1 — 기존 자동 엔진을 실행해서 비교
 
-- homography `H`: 원본 표시 픽셀 -> 정규화 경기장 좌표
-- viewport: 원본 표시 픽셀 <-> 편집 화면 좌표
-- 원본 오버레이: 경기장 특징 -> `inverse(H)` -> 원본 표시 픽셀 -> viewport
+첫 실행 순서는 PnLCalib와 TVCalib다. PnLCalib는 공개 예제와 같은 native 100장 실행까지 완료했고,
+이제 동일 입력의 TVCalib predicted-segmentation 경로와 독립 평가를 진행한다.
+Broadcast2Pitch SFR와 Sportlight는 가중치/의존성/VRAM 준비 상태와 보완 가치를 확인해 추가한다.
+각 모델의 코드 SHA·가중치 SHA256·전처리·필드 모델·오류·시간·메모리를 기록한다.
+표본에 관측을 수동으로 넣거나 잘 나온 프레임만 성공률 분모에 남기는 것을 금지한다.
 
-### 4. 편집 초안과 저장 결과를 분리
+### 2. 실측 실패 원인에 따른 분기
 
-현재 편집 초안, 해당 초안의 preview, 선택된 저장 결과는 서로 다른 상태로 관리한다. `video_id + source_revision + frame_index`를 기준으로 프레임별 초안을 구분한다.
+인지 실패면 목표 도메인 적응을 검토한다. 다른 종목/규격이면 필드 모델·라벨 체계부터 대응시킨다.
+프레임별 결과가 좋고 시간 연속성이 나쁘면 자동 시간축 정합과 재초기화를 강화한다.
+결과를 보기 전 큰 DB migration, 독자 mixed solver, 선 스냅 UI나 상주 디코더를 먼저 만들지 않는다.
+필요한 관측 계약은 자동 엔진의 실제 출력으로부터 최소한으로 도출한다.
 
-오래된 preview 응답이 이후 편집이나 다른 프레임의 상태를 덮어쓰지 않도록 `draft_version`과 현재 video/frame 문맥을 확인한다.
+### 3. P1 병행
 
-### 5. 독립 검증은 유지
+`player detection → image-space tracklet → identity review → 등장 구간 검색 → 원본 재생`을 별도 작업으로 둔다.
+정합 실패 구간에도 등장 구간 검색은 계속 가능해야 한다. 검증된 정합만 선택적으로 pitch 위치를 제공한다.
+현재 30단계 전파 provider를 경기 전체 분석기처럼 무조건 확장하지 않고, 긴 순차 읽기/청크/중단 재개를 별도 검토한다.
+SAM2, 등번호 인식, 이벤트 해설을 동시에 첫 실행의 필수 의존성으로 붙이지 않는다.
 
-적합에 사용한 관측과 검증 관측을 분리한다. 독립 검증 입력 중에는 예측 오버레이를 숨길 수 있으며, 전파 결과는 자동으로 `usable`이 되지 않는다.
+## 진행 상태를 기록하는 법
 
-## 자동 검증 상태
+`문헌 확인`, `가중치 다운로드`, `환경 smoke`, `실제 추론`, `독립 정확도 평가`를 각각 구분한다.
+이번 입력 준비의 실행 결과는 [preparation-results.md](../experiments/001-auto-calibration/preparation-results.md)에 기록한다.
+`not_run`/`not_measured`를 0점 또는 성공으로 바꾸지 않는다.
+추론 때의 수동 개입은 0회를 목표로 하되, 평가 전용 독립 라벨 작업은 추론 입력과 분리해 한 번 작성·재사용한다.
 
-현재 저장소에는 다음 검증 경로가 있다.
-
-- Python geometry/API 테스트
-- Node 기반 `editor-core` 테스트
-- JavaScript syntax check
-- Chromium 브라우저 흐름 테스트
-- GitHub Actions에서 `python tests/run_checks.py` 실행
-
-`master @ cc6caf6`의 GitHub Actions는 성공 상태다.
-
-문서화된 2026-09-09 로컬 격리 실행에서는 다음이 통과했다.
-
-- Python 테스트 29개
-- Node editor-core 및 기준점 테스트 12개
-- JavaScript syntax validation
-- Chromium DPR 2 편집 흐름 및 모바일 썸네일 탐색
-
-이는 합성 fixture를 대상으로 한 기능 검증이며 실제 경기 정합 정확도 보장은 아니다.
-
-## 실제 영상 1차 평가에서 확인한 문제
-
-`20260717_153525.mp4`를 로컬 격리 DB로 평가한 결과, 편집기 기능은 실제 영상에서도 동작했지만 프레임 접근 비용이 크게 나타났다.
-
-측정 예:
-
-- import + 첫 프레임: 약 73.315초
-- frame 150: 약 1.913초
-- frame 2700: 약 8.007초
-- frame 5100: 약 15.010초
-- 인접 프레임: 약 0.980초
-
-이 수치는 해당 장비·영상에 대한 측정값이며 성능 보장이 아니다. 다만 현재 media I/O 구조가 실제 사용자 흐름의 다음 병목이라는 근거로 사용한다.
-
-같은 평가에서 영상에 경기장 일부만 보이고 카메라가 이동하기 때문에, 한 프레임에서 알려진 잘 분포된 대응점 네 개를 항상 확보하기 어렵다는 점도 확인했다. 따라서 v0.3에서는 단순히 점 입력을 더 편하게 만드는 것뿐 아니라 **semantic landmark / line / arc 같은 관측 계약 확장**을 검토해야 한다.
-
-## 다음 개발 우선순위
-
-### 1. PR-05: media access 개선
-
-프레임 탐색과 전파의 대기시간을 줄이는 구현을 반영했다. 기존의 정확한 프레임/PTS 대응을 기준 구현으로 유지한다. 측정과 자원 한도는 [개선 반영 결과](improvement-plan.md)를 참고한다.
-
-우선순위:
-
-1. 반영: 최대 30단계 전파를 제한된 연속 디코딩 창으로 읽는 frame provider
-2. 반영: 서버·브라우저 제한 캐시. 인접 프레임 선행 로딩은 후속
-3. 반영: 대표 장면 thumbnail과 정밀 입력용 원본 프레임 분리
-4. 반영: 기존 추출 경로와 새 경로의 frame/PTS 동등성 테스트
-5. 반영: 원본 PTS가 명확한 경우에만 seek, 실패하면 순차 디코딩
-
-성능 개선 때문에 VFR, B-frame, 회전 메타데이터에서 원본 프레임 대응이 깨지지 않아야 한다.
-
-### 2. v0.3: 관측 계약 v2
-
-자동 line detector부터 만들기보다 먼저 데이터 계약을 확장한다.
-
-관측이 표현해야 할 최소 정보:
-
-- observation ID
-- 종류: point / line / arc
-- 연결된 경기장 feature ID
-- 원본 영상 관측 좌표
-- 역할: fit / validation
-- 생성 방법: manual / snap / propagated / derived
-- 부모 관측 ID
-- field model ID와 version
-
-기존 point observation은 계속 읽을 수 있어야 하며, 구버전 데이터에 없던 의미 정보를 임의로 추정해서 채우지 않는다.
-
-이 계약 위에서 다음 순서로 확장한다.
-
-1. semantic landmark 선택
-2. 점 + 선 혼합 정합
-3. 사용자가 지정한 좁은 ROI 내 line snap
-4. 제약 부족/중복/비독립 검증 판정
-5. arc fitting과 자동 후보는 별도 실험으로 평가
-
-### 3. P1은 v0.3 완료를 기다리지 않는다
-
-프로젝트의 최종 목적은 정합 도구 자체가 아니라 **경기 내용을 이해하고 나중에 선수·상황·사건으로 역조회하는 것**이다.
-
-따라서 P1은 영상 좌표만으로도 시작할 수 있어야 한다.
-
-```text
-player detection / tracking
-        ↓
-image-space tracklet
-        ↓
-identity review
-        ↓
-appearance interval search
-```
-
-검증된 registration이 존재할 때만 선택적으로 pitch coordinate를 부여한다.
-
-```text
-tracklet + usable registration
-              ↓
-       optional pitch position
-```
-
-완전한 경기장 자동 정합을 P1의 선행 조건으로 두지 않는다.
-
-## 개발 프로세스 개선
-
-초기 v0.2 첫 묶음은 `master`에 직접 커밋되었고 현재 PR 이력은 없다. 저장소가 커지면서 geometry, editor, media, tracking 변경이 동시에 진행될 가능성이 높으므로 다음 단계부터는 feature branch + PR 단위를 권장한다.
-
-예시:
-
-- `perf/frame-provider-cache`
-- `feat/observation-contract-v2`
-- `feat/semantic-landmarks`
-- `feat/player-tracklets`
-
-각 PR은 기능 구현과 회귀 테스트를 함께 포함하고, 기존 source-of-truth 문서(`CONTRACT.md`, 평가 문서)를 변경 사항에 맞게 갱신한다.
-
-## 현재 로드맵
-
-```text
-P0 v0.1
-  └─ 기본 수동 점 정합                         완료
-
-v0.2 first bundle
-  ├─ 좌표 자격/계산 안전성                    완료
-  ├─ 실제 비저장 preview                      완료
-  ├─ zoom/pan/editor + undo/redo              완료
-  ├─ 프레임별 draft                           완료
-  ├─ 원본 overlay + residual                  완료
-  ├─ async stale-result 방어                  완료
-  ├─ CI                                       완료
-  └─ 실제 영상 1차 평가                      완료
-
-v0.2 remaining
-  ├─ media cache / bounded continuous decode   완료
-  ├─ exact PTS seek / scene thumbnails         완료
-  └─ persistent decoder / editor prefetch     후속 측정
-
-v0.3
-  ├─ observation contract v2                  예정
-  ├─ semantic landmark                        선택 UI 반영, 계약 확장 예정
-  ├─ point + line                             예정
-  ├─ line snap                                예정
-  └─ arc / auto candidate                     실험
-
-P1
-  ├─ player detection                         예정
-  ├─ image-space tracklet                     예정
-  ├─ identity review                          예정
-  └─ appearance interval search               예정
-```
+기능 branch와 PR 단위로 코드를 검토한다. 이 문서의 PR-01~05 명칭은 과거 계획 작업 단위이며 실제 GitHub PR 번호가 아니다.
+후속 예: `experiment/auto-calibration-bakeoff`, `feat/pnlcalib-adapter`, `feat/player-tracklet-search`.
 
 ## 관련 문서
 
-- [`../CONTRACT.md`](../CONTRACT.md): API와 데이터 계약
-- [`../V02_IMPLEMENTATION.md`](../V02_IMPLEMENTATION.md): v0.2 첫 개발 묶음의 구현 범위
-- [`v02-evaluation.md`](v02-evaluation.md): 자동 검증과 실제 영상 평가 결과
+- [현재 API·모듈 계약](../CONTRACT.md)
+- [v0.2 구현 기록](../V02_IMPLEMENTATION.md)
+- [기능/초기 실제 영상 평가](v02-evaluation.md)
+- [영상 접근 개선 결과](improvement-plan.md)
+- [자동 정합 비교 실험](../experiments/001-auto-calibration/README.md)
+- [실행 현황과 다음 작업 인계](../experiments/001-auto-calibration/status-and-handoff.md)
